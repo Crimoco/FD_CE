@@ -8,25 +8,22 @@ import time
 from datetime import datetime
 import queue
 
-import ChipTesting.Integration.RTSStateMachine as RTSSM
-from ChipTesting.Integration.RTSStateMachine import RTSStateMachine
-
 # Makes modules from adjacent subdirectories searchable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 
 # Takes standard console output and puts into a queue that this program will display with GUI
-class InputOutput(io.TextIOBase):
-    def __init__(self, queue, tag = "info"):
-        self.queue = queue
-        self.tag = tag
+class InputOutput(io.TextIOBase): # Inherits io.TextIOBase so Python treats worker thread output as an object to insert into queue
+    def __init__(self, queue, tag = "info"): # Takes in queue as argument and makes variable tag for coloring text during CLI output 
+        self.queue = queue # Declares queue
+        self.tag = tag # Declares tag
     
     def write(self, str):
         if str and str != "\n":
-            self.queue.put((self.tag, str.rstrip("\n")))
+            self.queue.put((self.tag, str.rstrip("\n"))) # Intercepts print() calls and puts into queue
         elif str == "\n":
             pass
-        return len(str)
-    def flush(self):
+        return len(str) # returns number of characters written successfully to prevent error
+    def flush(self): # Normally needed to push buffered text to print but no buffer here exists, thus doesn't do anything but please io.TextIOBase
         pass
 
 # Blocks "worker" thread until user responds with GUI input
@@ -46,7 +43,7 @@ class ChipTestingGUI(tk.Tk):
         super().__init__()
         self.title("DUNE Chip Testing QC")
         self.geometry('1500x1100')
-        self.minsize('1100x750')
+        self.minsize(1100 , 750)
 
         self.output_queue = queue.Queue() # Carries print call from worker thread to a queue for CLI output
         self.input_queue = queue.Queue() # Carries any request for user input from worker thread to a queue for CLI output
@@ -95,6 +92,7 @@ class ChipTestingGUI(tk.Tk):
     # Results tab (To be continued after design decided on)
     def build_results_tab(self):
         self
+
     # Set Up tab
     def build_set_up_tab(self):
         intro = ttk.LabelFrame(self.set_up_tab, text = "Set Up Confguration").pack(fill = "x", padx = 6, pady = 4)
@@ -117,25 +115,52 @@ class ChipTestingGUI(tk.Tk):
         ttk.Radiobutton(row0, text = "Manual", variable = self.populate_mode, value = "m").grid(row = 2, column = 2, sticky = "w")
 
         data_entry_manual= ttk.LabelFrame(intro, text = "Manua Chip Data Entry (Use only when in manual populate mode)").pack(fill = "x", padx = 6, pady = 4)
-        data_entry_headers = ["Tray", "Column", "Row", "DAT", "DAT Socket", "Label"]
+        data_entry_headers = ["Tray", "Column", "Row", "DAT", "DAT Socket", "Label", "Delete"]
 
-        self.chip_rows = []
+        # Creates tuple for each entry in data_entry_headers to create a column for each 
+        for col, header in enumerate(data_entry_headers):
+            ttk.Label(data_entry_manual, text = header, font= ("Helvetica", 10)).grid(row = 0, column = col, padx = 4, pady = 2, sticky = "w'")
 
+        self.chip_rows = [] # Creates a dictionary to keep track of chip rows
+        self.chip_row_frame = data_entry_manual # ensures that data_entry_manual can be search by future functions as data_entry_manual is a local variable
+        self.chip_row_count = 0 # Keeps track of number of rows 
 
+        # Creates button to add chip data rows or remove all
+        row_buttons = ttk.Frame(intro)
+        row_buttons.pack(fill = "x", padx = 6, pady = 4)
+        ttk.Button(row_buttons, text = "+ Add Chip Data", command = self.add_chip_row).pack(side = "left", pady=2)
+        ttk.Button(row_buttons, text = "- Clear All Chip Data", command = self.remove_all_rows).pack(side = "left", pady = 2)
 
+        self.add_chip_row()
+        self.add_chip_row()
 
+    # Creates function to add chip rows
+    def add_chip_row(self):
+        current_row_count = self.chip_row_count + 1 # Turns to next available row number
+        row_widgets = {} # Initializes dictionary for that will hold widgets for each row 
+        ttk.Label(self.chip_row_frame, text = str(current_row_count)).grid(row = current_row_count, column = 0, padx = 4) # label for row number
 
+        # Creates six drop down menus for each header
+        for column_counter, (key, vals) in enumerate([
+            ("Tray", ["1", "2"])
+            ("Column", ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"])
+            ("Row", ["1", "2", "3", "4"])
+            ("DAT", ["1", "2"])
+            ("Socket", ["21", "22"])
+            ("Label", ["CD0", "CD1"])
+
+        ]):
+            v = tk.StringVar(value = vals[0]) # Creates a variable v to hold onto current vals selection
+            cb = ttk.Combobox(self.chip_row_frame, textvariable = v, value = vals, width = 12, state = "readonly") # Creates combo widget and forbids picking values out of list
+            cb.grid(row = current_row_count, column = column_counter + 1, padx = 4, pady = 2) # places combo box in the right cell
+            row_widgets[key] = v # Saves tk.StringVar under its field name in the dictionary (Useful to read value user picked)
+        
 
         
 
     # State tab
     def build_state_tab(self):
         self
-
-
-
-
-
 
 
 
