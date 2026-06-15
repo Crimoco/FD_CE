@@ -91,9 +91,43 @@ class ChipTestingGUI(tk.Tk):
         self.build_set_up_tab()
         self.build_state_tab()
 
-    # Results tab (To be continued after design decided on)
+    # Results tab
     def build_results_tab(self):
-        self
+        intro = self.results_tab
+        out_frame = ttk.LabelFrame(intro, text = "Live CLI Output")
+        out_frame.pack(fill = "y", expand = False, padx= 6, pady = 2)
+
+        # Creates console on right-hand side of GUI
+        self.output = scrolledtext.ScrolledText(
+            out_frame, state = "disabled", wrap = "word", 
+            font = ("Helvetica", 9), height = 22
+        )
+        self.output.pack(fill = "both", expand = True, padx = 4, pady = 4)
+
+        # Configures console text to differentiate between information types
+        self.output.tag_configure("info", foreground = "white")
+        self.output.tag_configure("error", foreground = "red")
+        self.output.tag_configure("prompt", foreground = "blue", font = ("Courier", 9, "bold"))
+        self.output.tag_configure("answer", foreground = "white", font = ("Courier", 9, "bold"))
+        self.output.tag_configure("state", foreground = "orange", font = ("Courier", 9, "bold"))
+
+        self.input_frame = ttk.LabelFrame(intro, text = "Input Required")
+        self.input_frame.pack(fill = "x", padx = 6, pady = 6)
+
+        self.prompt_label = ttk.Label(self.input_frame, textvariable = self.answer_var, font = ("Courier", 10), width = 15, wraplength = 900, justify = "right") # Remember self.answer_var for input func
+        self.prompt_label.pack(anchor = "w", padx = 6, pady = 6)
+
+        input_row = ttk.Frame(self.input_frame)
+        input_row.pack(fill = "x", padx = 6, pady = 6)
+
+        self.answer_var = tk.StringVar()
+        self.answer_entry = ttk.Entry(input_row, textvariable = self.answer_var, font = ("Courier", 10), width  = 15)
+        self.answer_entry.pack(side = "left", pady = 6)
+        self.submit_button = ttk.Button(input_row, text = "Submit", command = self.submit_answer, state = "disabled") # self.submit_answer to be a function that passed text into response_queue
+        self.submit_button.pack(side = "left")
+
+        self.set_input_active(False) # To initialize with input frame collapsed
+
 
     # Set Up tab
     def build_set_up_tab(self):
@@ -188,16 +222,61 @@ class ChipTestingGUI(tk.Tk):
         self.add_chip_row()
         last = self.chip_rows[-1]
         for k, v in d.items(): 
-            last[k].set(v.get() if hasattr(v, "get") else v) # Checks if value has a get() method and extracts to put into new widget
-        return        
+            last[k].set(v.get() if hasattr(v, "get") else v) # Checks if value has a get() method then extracts to put into new widget
+            
     
     def remove_all_rows(self):
-
-        return
+        for w in self.chip_row_frame.grid_slaves():
+            if int(w.grid_info()["row"]) > 0:
+                w.destroy
+        self.chip_rows = []
+        self.chip_row_count = 0
+    
+    # Returns list of dictionaries from chip_rows to forward to RTSStateMachine
+    def get_chip_list(self):
+        result = []
+        for rd in self.chip_rows:
+            result.append({k: rd[k].get() for k in rd})
+        return result
 
     # State tab
     def build_state_tab(self):
         return
+    
+    def set_input_active(self, active, prompt = ""): # Input/Output helper to determine if waiting for input boxed is turned off or on and sets up if on
+        self.waiting_for_input = active
+        if active: 
+            self.prompt_label.configure(text=f"{prompt}")
+            self.answer_var.set("")
+            self.submit_button.configure(state = "normal")
+            self.answer_entry.configure(state = "normal")
+            self.answer_entry.focus_set()
+        else:
+            self.prompt_label.configure(text = "{Watiing for program to ask for input}")
+            self.submit_button.configure(state = "disabled")
+            self.answer_entry.configure(state = "disabled")
+        self.pending_prompt = prompt
+
+    def submit_answer(self): # Takes input and makes sure there is an answer, then sanitizes it for send_answer
+        if not self.waiting_for_input:
+            return
+        answer = self.answer_var.get().strip().lower()
+        if not answer: # Do not do anything if no actual answer is inputted
+            return
+        self.send_answer(answer)
+    
+    def send_answer(self, answer): # Sends answer to worker thread 
+        if not self.running:
+            return
+        self.append_output(f" > {answer}", "answer") # self.append_ouput will write to CLI with color and timestamp
+        self.reply_queue.put(answer) # Puts answer into reply queue
+        self.set_input_active(False) # 
+    
+    def append_output(self, text, tag = "info"):
+        self.output.configure(state = "normal")
+        timestamp = datetime.now().strftime("%H:%M:%S") # creates timestamp in Hour:Minute:Second
+
+
 
 
 # Starts this program
@@ -205,15 +284,5 @@ if __name__ == "__main__":
     app = ChipTestingGUI()
     app.mainloop()
 
-
-
-
-
-
-        
-
-
-
-    
 
     
