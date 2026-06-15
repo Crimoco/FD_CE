@@ -1,5 +1,5 @@
 import os 
-import sys
+import sys 
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 import threading
@@ -54,6 +54,8 @@ class ChipTestingGUI(tk.Tk):
 
         self.waiting_for_input = False # Variable to track when waiting for input. Trigger variable to send reply out of queue
         self.pending_prompt = "" # Holds prompt as a string in order to make reading prompt easier. Will use this for making buttons usable
+        self.build_UI()
+
 
     # Details of the UI itself
     def build_UI(self):
@@ -64,7 +66,7 @@ class ChipTestingGUI(tk.Tk):
         top_hotbar = ttk.Frame(self, relief = "groove")
         top_hotbar.pack(side = "top", fill = "x", padx = 6, pady= 4)
         
-        ttk.Label(top_hotbar, text = "DUNE Chip Testing GC", font = ("Helvetica", 10, "Bold")).pack(side = "left", padx = 4, pady = 4)
+        ttk.Label(top_hotbar, text = "DUNE Chip Testing GC", font = ("Helvetica", 10, "bold")).pack(side = "left", padx = 4, pady = 4)
         
         self.button_run = ttk.Button(top_hotbar, text = "▶ Play").pack(side = "left", padx = 4, pady = 4)
         self.button_abort = ttk.Button(top_hotbar, text  = "⏹ Abort").pack(side = "left", padx = 4, pady = 4)
@@ -95,34 +97,44 @@ class ChipTestingGUI(tk.Tk):
 
     # Set Up tab
     def build_set_up_tab(self):
-        intro = ttk.LabelFrame(self.set_up_tab, text = "Set Up Confguration").pack(fill = "x", padx = 6, pady = 4)
+        intro = ttk.LabelFrame(self.set_up_tab, text = "Set Up Confguration")
+        intro.pack(fill = "x", padx = 6, pady = 4)
 
         # Creates Frame for start up configuration as well as buttons for y/n or m/f
-        row0 = ttk.Frame(intro).pack(fill = "x", padx = 6, pady = 4)
+        row0 = ttk.Frame(intro)
+        row0.pack(fill = "x", padx = 6, pady = 4)
+
         ttk.Label(row0, text = "Simulation Mode:").grid(row = 0, column = 0, sticky = "w")
         self.simulation_variable = tk.StringVar(value = "n")
         ttk.Radiobutton(row0, text = "Yes", variable = self.simulation_variable, value = "y").grid(row = 0, column = 1, sticky = "w")
         ttk.Radiobutton(row0, text = "No", variable = self.simulation_variable, value = "n").grid(row = 0, column = 2, sticky = "w")
+
 
         ttk.Label(row0, text = "Bypass RTS:").grid(row = 1, column = 0, sticky = "w")
         self.bypass_rts_variable = tk.StringVar(value =  "n")
         ttk.Radiobutton(row0, text = "Yes", variable = self.bypass_rts_variable, value = "y").grid(row = 1, column = 1, sticky = "w")
         ttk.Radiobutton(row0, text = "No", variable = self.bypass_rts_variable, value = "n").grid(row = 1, column = 2, sticky = "w")
 
+
         ttk.Label(row0, text = "Populate mode:").grid(row = 2, column = 0, sticky = "w")
         self.populate_mode = tk.StringVar(value = "m")
         ttk.Radiobutton(row0, text = "Full tray", variable = self.populate_mode, value = "f").grid(row = 2, column = 1, sticky = "w")
         ttk.Radiobutton(row0, text = "Manual", variable = self.populate_mode, value = "m").grid(row = 2, column = 2, sticky = "w")
 
-        data_entry_manual= ttk.LabelFrame(intro, text = "Manua Chip Data Entry (Use only when in manual populate mode)").pack(fill = "x", padx = 6, pady = 4)
+
+        self.chip_row_frame = ttk.LabelFrame(intro, text = "Manua Chip Data Entry (Use only when in manual populate mode)").pack(fill = "x", padx = 6, pady = 4)
         data_entry_headers = ["Tray", "Column", "Row", "DAT", "DAT Socket", "Label", "Delete"]
 
+
+        self.chip_row_frame = ttk.LabelFrame(intro, text = "Manual Chip Data Entry (Use only when in manual populate mode)")
+        self.chip_row_frame.pack(fill = "x", padx = 6, pady = 4)
+        
+        data_entry_headers = ["#", "Tray", "Column", "Row", "DAT", "DAT Socket", "Label", "Delete"]
         # Creates tuple for each entry in data_entry_headers to create a column for each 
         for col, header in enumerate(data_entry_headers):
-            ttk.Label(data_entry_manual, text = header, font= ("Helvetica", 10)).grid(row = 0, column = col, padx = 4, pady = 2, sticky = "w'")
+            ttk.Label(self.chip_row_frame, text = header, font= ("Helvetica", 10)).grid(row = 0, column = col, padx = 4, pady = 2, sticky = "w")
 
-        self.chip_rows = [] # Creates a dictionary to keep track of chip rows
-        self.chip_row_frame = data_entry_manual # ensures that data_entry_manual can be search by future functions as data_entry_manual is a local variable
+        self.chip_rows = [] # Creates a dictionary to keep track of each chip rows
         self.chip_row_count = 0 # Keeps track of number of rows 
 
         # Creates button to add chip data rows or remove all
@@ -142,11 +154,11 @@ class ChipTestingGUI(tk.Tk):
 
         # Creates six drop down menus for each header
         for column_counter, (key, vals) in enumerate([
-            ("Tray", ["1", "2"])
-            ("Column", ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"])
-            ("Row", ["1", "2", "3", "4"])
-            ("DAT", ["1", "2"])
-            ("Socket", ["21", "22"])
+            ("Tray", ["1", "2"]),
+            ("Column", ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]),
+            ("Row", ["1", "2", "3", "4"]),
+            ("DAT", ["1", "2"]),
+            ("Socket", ["21", "22"]),
             ("Label", ["CD0", "CD1"])
 
         ]):
@@ -154,18 +166,38 @@ class ChipTestingGUI(tk.Tk):
             cb = ttk.Combobox(self.chip_row_frame, textvariable = v, value = vals, width = 12, state = "readonly") # Creates combo widget and forbids picking values out of list
             cb.grid(row = current_row_count, column = column_counter + 1, padx = 4, pady = 2) # places combo box in the right cell
             row_widgets[key] = v # Saves tk.StringVar under its field name in the dictionary (Useful to read value user picked)
-        
 
-        
+        def remove(row_idx = current_row_count - 1):
+            self.chip_rows.pop(row_idx) # Removes row's dictionary of StringVars from chip_rows
+            # Rebuilds the display so that lower rows move upward
+            for w in self.chip_row_frame.grid_slaves(): # Returns every widget currently placed in chip_row_frame
+                if int(w.grid_info()["row"]) > 0: # Checks if row is not the header row
+                    w.destroy() # destroys chip row's widgets
+            self.chip_row_count = 0
+            tmp = list(self.chip_rows) # Temporarily copies chip_rows into a temp list to keep chip_row data after deletion
+            self.chip_rows = []
+            # Loops through saved rows to re-add into chip_rows to reset row number that will be displayed in column
+            for rd in tmp:
+                self.add_chip_row_from_dict(rd) 
+
+        ttk.Button(self.chip_row_frame, text = "X", width = 2, command = remove).grid(row = current_row_count, column = 7, padx = 4)
+        self.chip_rows.append(row_widgets) 
+        self.chip_row_count += 1
+
+    def add_chip_row_from_dict(self, d):
+        self.add_chip_row()
+        last = self.chip_rows[-1]
+        for k, v in d.items(): 
+            last[k].set(v.get() if hasattr(v, "get") else v) # Checks if value has a get() method and extracts to put into new widget
+        return        
+    
+    def remove_all_rows(self):
+
+        return
 
     # State tab
     def build_state_tab(self):
-        self
-
-
-
-
-        
+        return
 
 
 # Starts this program
