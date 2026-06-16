@@ -22,7 +22,7 @@ class InputOutput(io.TextIOBase): # Inherits io.TextIOBase so Python treats work
             self.queue.put((self.tag, str.rstrip("\n"))) # Intercepts print() calls and puts into queue
         elif str == "\n":
             pass
-        return len(str) # returns number of characters written successfully to prevent error
+        return len(str) # Returns number of characters written successfully to prevent error
     def flush(self): # Normally needed to push buffered text to print but no buffer here exists, thus doesn't do anything but please io.TextIOBase
         pass
 
@@ -68,8 +68,10 @@ class ChipTestingGUI(tk.Tk):
         
         ttk.Label(top_hotbar, text = "DUNE Chip Testing GC", font = ("Helvetica", 10, "bold")).pack(side = "left", padx = 4, pady = 4)
         
-        self.button_run = ttk.Button(top_hotbar, text = "▶ Play").pack(side = "left", padx = 4, pady = 4)
-        self.button_abort = ttk.Button(top_hotbar, text  = "⏹ Abort").pack(side = "left", padx = 4, pady = 4)
+        self.run_button = ttk.Button(top_hotbar, text = "▶ Play", state = "normal", command = self.run)
+        self.run_button.pack(side = "left", padx = 4, pady = 4)
+        self.abort_button = ttk.Button(top_hotbar, text  = "⏹ Abort", state = "disabled", command = self.abort)
+        self.abort_button.pack(side = "left", padx = 4, pady = 4)
 
         self.status = tk.StringVar(value = "Idle")
         ttk.Label(top_hotbar, textvariable = self.status, relief = "sunken", font = ("Helvetica", 10), width = 20).pack(side = "right", padx = 6, pady = 4)
@@ -94,8 +96,17 @@ class ChipTestingGUI(tk.Tk):
     # Results tab
     def build_results_tab(self):
         intro = self.results_tab
+        if not self.running:
+            not_running_frame = ttk.LabelFrame(intro, text = "Click run to begin testing")
+            not_running_frame.pack(fill = "both", expand = True, )
         out_frame = ttk.LabelFrame(intro, text = "Live CLI Output")
         out_frame.pack(fill = "y", expand = False, padx= 6, pady = 2)
+
+        results_one_frame = ttk.LabelFrame(intro, text = "Results for Socket 21")
+        results_one_frame.pack(fill = "y", expand = False, padx = 6, pady = 2)
+        results_two_frame = ttk.LabelFrame(intro, text = "Results for Socket 22")
+        results_two_frame.pack(fill = "y",  expand = False, padx = 6, pady = 2)
+
 
         # Creates console on right-hand side of GUI
         self.output = scrolledtext.ScrolledText(
@@ -105,8 +116,8 @@ class ChipTestingGUI(tk.Tk):
         self.output.pack(fill = "both", expand = True, padx = 4, pady = 4)
 
         # Configures console text to differentiate between information types
-        self.output.tag_configure("info", foreground = "white")
-        self.output.tag_configure("error", foreground = "red")
+        self.output.tag_configure("info", foreground = "white", font = ("Courier", 9))
+        self.output.tag_configure("error", foreground = "red", font = ("Courier", 9))
         self.output.tag_configure("prompt", foreground = "blue", font = ("Courier", 9, "bold"))
         self.output.tag_configure("answer", foreground = "white", font = ("Courier", 9, "bold"))
         self.output.tag_configure("state", foreground = "orange", font = ("Courier", 9, "bold"))
@@ -114,19 +125,19 @@ class ChipTestingGUI(tk.Tk):
         self.input_frame = ttk.LabelFrame(intro, text = "Input Required")
         self.input_frame.pack(fill = "x", padx = 6, pady = 6)
 
+        self.answer_var = tk.StringVar()
         self.prompt_label = ttk.Label(self.input_frame, textvariable = self.answer_var, font = ("Courier", 10), width = 15, wraplength = 900, justify = "right") # Remember self.answer_var for input func
         self.prompt_label.pack(anchor = "w", padx = 6, pady = 6)
 
         input_row = ttk.Frame(self.input_frame)
         input_row.pack(fill = "x", padx = 6, pady = 6)
 
-        self.answer_var = tk.StringVar()
         self.answer_entry = ttk.Entry(input_row, textvariable = self.answer_var, font = ("Courier", 10), width  = 15)
         self.answer_entry.pack(side = "left", pady = 6)
         self.submit_button = ttk.Button(input_row, text = "Submit", command = self.submit_answer, state = "disabled") # self.submit_answer to be a function that passed text into response_queue
         self.submit_button.pack(side = "left")
 
-        self.set_input_active(False) # To initialize with input frame collapsed
+        self.set_input_active(False) # To initialize with input frame without any text
 
 
     # Set Up tab
@@ -156,7 +167,7 @@ class ChipTestingGUI(tk.Tk):
         ttk.Radiobutton(row0, text = "Manual", variable = self.populate_mode, value = "m").grid(row = 2, column = 2, sticky = "w")
 
 
-        self.chip_row_frame = ttk.LabelFrame(intro, text = "Manua Chip Data Entry (Use only when in manual populate mode)").pack(fill = "x", padx = 6, pady = 4)
+        self.chip_row_frame = ttk.LabelFrame(intro, text = "Manual Chip Data Entry (Use only when in manual populate mode)").pack(fill = "x", padx = 6, pady = 4)
         data_entry_headers = ["Tray", "Column", "Row", "DAT", "DAT Socket", "Label", "Delete"]
 
 
@@ -176,9 +187,6 @@ class ChipTestingGUI(tk.Tk):
         row_buttons.pack(fill = "x", padx = 6, pady = 4)
         ttk.Button(row_buttons, text = "+ Add Chip Data", command = self.add_chip_row).pack(side = "left", pady=2)
         ttk.Button(row_buttons, text = "- Clear All Chip Data", command = self.remove_all_rows).pack(side = "left", pady = 2)
-
-        self.add_chip_row()
-        self.add_chip_row()
 
     # Creates function to add chip rows
     def add_chip_row(self):
@@ -218,17 +226,18 @@ class ChipTestingGUI(tk.Tk):
         self.chip_rows.append(row_widgets) 
         self.chip_row_count += 1
 
+    # Helper method for remove() so that row below deleted row can be moved up
     def add_chip_row_from_dict(self, d):
         self.add_chip_row()
         last = self.chip_rows[-1]
         for k, v in d.items(): 
-            last[k].set(v.get() if hasattr(v, "get") else v) # Checks if value has a get() method then extracts to put into new widget
+            last[k].set(v.get()) # Extracts StringVar() to set in brand new empty chip row
             
     
     def remove_all_rows(self):
         for w in self.chip_row_frame.grid_slaves():
             if int(w.grid_info()["row"]) > 0:
-                w.destroy
+                w.destroy()
         self.chip_rows = []
         self.chip_row_count = 0
     
@@ -236,14 +245,15 @@ class ChipTestingGUI(tk.Tk):
     def get_chip_list(self):
         result = []
         for rd in self.chip_rows:
-            result.append({k: rd[k].get() for k in rd})
+            result.append({k: rd[k].get() for k in rd}) # From each row in self.chip_rows, call .get() on each widget's StringVar() to retrieve selected value
         return result
 
-    # State tab
+    # State tab (Remember to create this for later)
     def build_state_tab(self):
         return
     
-    def set_input_active(self, active, prompt = ""): # Input/Output helper to determine if waiting for input boxed is turned off or on and sets up if on
+    # Input/Output helper to determine if waiting for input box is turned off or on and sets up if on
+    def set_input_active(self, active, prompt = ""): 
         self.waiting_for_input = active
         if active: 
             self.prompt_label.configure(text=f"{prompt}")
@@ -252,31 +262,78 @@ class ChipTestingGUI(tk.Tk):
             self.answer_entry.configure(state = "normal")
             self.answer_entry.focus_set()
         else:
-            self.prompt_label.configure(text = "{Watiing for program to ask for input}")
+            self.prompt_label.configure(text = "{Waiting for program to ask for input}")
             self.submit_button.configure(state = "disabled")
             self.answer_entry.configure(state = "disabled")
         self.pending_prompt = prompt
 
-    def submit_answer(self): # Takes input and makes sure there is an answer, then sanitizes it for send_answer
+    # Takes input and makes sure there is an answer, then sanitizes it for send_answer
+    def submit_answer(self): 
         if not self.waiting_for_input:
             return
         answer = self.answer_var.get().strip().lower()
-        if not answer: # Do not do anything if no actual answer is inputted
+        if not answer: # Do not do anything if there is no input
             return
         self.send_answer(answer)
     
-    def send_answer(self, answer): # Sends answer to worker thread 
+    # Sends answer to worker thread
+    def send_answer(self, answer):  
         if not self.running:
             return
         self.append_output(f" > {answer}", "answer") # self.append_ouput will write to CLI with color and timestamp
         self.reply_queue.put(answer) # Puts answer into reply queue
-        self.set_input_active(False) # 
+        self.set_input_active(False) # Ends active input session to disable text input while RTS State Machine runs
     
-    def append_output(self, text, tag = "info"):
-        self.output.configure(state = "normal")
-        timestamp = datetime.now().strftime("%H:%M:%S") # creates timestamp in Hour:Minute:Second
+    # Adds response onto CLI with a timestamp 
+    def append_output(self, text, tag = "info"): # Creates timestamp in Hour:Minute:Second
+        self.output.configure(state = "normal") # Allows for text to be written on CLI
+        timestamp = datetime.now().strftime("%H:%M:%S") 
+        self.output.insert("end", f"{timestamp} {text}\n", tag) # Prints time stamp, space, text and labels information type for coloring
+        self.output.see("end") # Scrolls down to end of CLI as would a real terminal
+        self.output.configure(state = "disabled") #
 
+    # 
+    def run(self):
+        # Checks to see if there is already a session in progress, and refuse to start if there is one
+        if self.running:
+            return
+        self.running = True
+        self.status.set("Running")
+        self.run_button.configure(state = "disabled")
+        self.abort_button.configure(state = "normal")
 
+        radio_button_answers = {
+            "simulation_mode_answer": self.simulation_variable.get(),
+            "bypass_rts_answer": self.bypass_rts_variable.get(),
+            "populate_mode_answer": self.populate_mode.get()
+        }
+
+        chip_list = self.get_chip_list() if self.simulation_variable.get() == "m" else None # Saves self.chip_rows so that chip information modified afterward will not mess with program
+
+        self.worker = threading.Thread( 
+            target = self.worker_thread, # Has self.worker_thread be the function of self.worker (what the thread should execute and behave)
+            args = (radio_button_answers, chip_list), 
+            daemon = True # Declare self.worker as a daemon so that process shuts of when window is deleted
+
+        )
+        self.worker.start()
+        
+    # 
+    def abort(self):
+        if not self.running:
+            return
+        self.append_output("Aborted, sending exit request")
+        self.running = False
+        self.status.set("Aborted")
+        self.run_button.configure(state = "normal")
+        self.abort_button.configure()
+        self.set_input_active(False)
+        return
+    
+    # This thread inserts start up questions into queue preloaded, puts stdout and stderr into output queue
+    def worker_thread(self, radio_button_answer, chip_list):
+
+        return
 
 
 # Starts this program
