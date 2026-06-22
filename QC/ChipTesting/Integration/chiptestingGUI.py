@@ -1,15 +1,13 @@
-import os 
 import sys 
 import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
+from tkinter import ttk, scrolledtext
 import threading
 import io
-import time
 from datetime import datetime
 import queue
+import os 
 
-# Makes modules from adjacent subdirectories searchable
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..')) # Makes ChipTesting findable for python 
 
 # Takes usual console output and puts into a queue that this program will display with GUI
 class InputOutput(io.TextIOBase): # Inherits io.TextIOBase so Python treats worker thread output as an object to insert into queue
@@ -33,8 +31,8 @@ class GUIInputProvider:
         self.prompt_queue = prompt_queue
         self.reply_prompt = reply_prompt
     def ask(self, prompt = ""):
-        self.prompt_queue.put(prompt) # Takes user input and drops into prompt queue 
-        return self.reply_prompt.get() # Retrieves user input from prompt queue
+        self.prompt_queue.put(prompt.strip()) # Takes prompt and drops into prompt queue 
+        return self.reply_prompt.get() # Retrieves user input from reply queue
 
 # Actual GUI for the program
 class ChipTestingGUI(tk.Tk):
@@ -55,7 +53,7 @@ class ChipTestingGUI(tk.Tk):
         self.waiting_for_input = False # Variable to track when waiting for input. Trigger variable to send reply out of queue
         self.pending_prompt = "" # Holds prompt as a string in order to make reading prompt easier. Will use this for making buttons usable
         self.build_UI()
-
+        self.poll()
 
     # Details of the UI itself
     def build_UI(self):
@@ -313,7 +311,7 @@ class ChipTestingGUI(tk.Tk):
         self.output.configure(state = "normal") # Allows for text to be written on CLI
         timestamp = datetime.now().strftime("%H:%M:%S") 
         self.output.insert("end", f"{timestamp} {text}\n", tag) # Prints time stamp, space, text and labels information type for coloring
-        self.output.see("end") # Scrolls down to end of CLI as would a real terminal
+        #self.output.see("end") # Scrolls down to end of CLI as would a real terminal
         self.output.configure(state = "disabled") #
 
     # 
@@ -336,7 +334,7 @@ class ChipTestingGUI(tk.Tk):
             "start_DAT": self.start_DAT.get()
         }
 
-        chip_list = self.get_chip_list() if self.simulation_variable.get() == "m" else None # Saves self.chip_rows so that chip information modified afterward will not mess with program
+        chip_list = self.get_chip_list() if self.populate_mode.get() in ("m") else None # Saves self.chip_rows so that chip information modified afterward will not mess with program
 
         self.worker = threading.Thread( 
             target = self.worker_thread, # Has self.worker_thread be the function of self.worker (what the thread should execute and behave)
@@ -359,8 +357,10 @@ class ChipTestingGUI(tk.Tk):
     
     # This thread inserts start up questions into queue preloaded, puts stdout and stderr into output queue
     def worker_thread(self, set_up_answers, chip_list):
+        import builtins
+
         startup_queue = queue.Queue()
-        startup_queue.put(set_up_answers["simultation_mode_answer"]) 
+        startup_queue.put(set_up_answers["simulation_mode_answer"]) 
         startup_queue.put(set_up_answers["bypass_rts_answer"])
         startup_queue.put(set_up_answers["populate_mode_answer"])
 
@@ -378,28 +378,75 @@ class ChipTestingGUI(tk.Tk):
                 else:
                     startup_queue.put("n")
         
-        if set_up_answers["populate_mode_answer"] == "r" or "rp":
+        if set_up_answers["populate_mode_answer"] in ("p", "rp"):
             startup_queue.put(set_up_answers["start_tray"])
             startup_queue.put(set_up_answers["start_column"])
             startup_queue.put(set_up_answers["start_row"])
             startup_queue.put(set_up_answers["start_DAT"])
 
 
-            provider = GUIInputProvider(self.input_queue, self.reply_queue) # Creates the live GUI input provider
+        provider = GUIInputProvider(self.input_queue, self.reply_queue) # Creates the live GUI input provider
 
-            # Answer start up prompts such as "Run in simulation mode", "Bypass RTS?", "Population mode"
-            def gui_input(prompt = ""):
-                if not startup_queue.empty():
-                    answer = startup_queue.get()
-                    self.output_queue.put(("info", f"[auto] {prompt.strip()}"))
-                    self.output_queue.put(("answer", f" >  {answer}"))
-                    return answer
-                self.output_queue.put(("prompt", prompt.strip()))
-                return provider.ask(prompt)
+        # Answer start up prompts such as "Run in simulation mode", "Bypass RTS?", "Population mode"
+        def gui_input(prompt = ""):
+            if not startup_queue.empty():
+                answer = startup_queue.get()
+                self.output_queue.put(("info", f"[auto] {prompt.strip()}"))
+                self.output_queue.put(("answer", f" >  {answer}"))
+                return answer
+            # Ask live GUI when startup_queue is empty
+            self.output_queue.put(("prompt", prompt.strip()))
+            return provider.ask(prompt)
+        original_input = builtins.input # Saves the functions of the original input()
+        original_stdout = sys.stdout # Saves 
+        original_stderr = sys.stderr
 
+        builtins.input = gui_input # Reassigns function of input() to gui_input as to have input requests be sent to CLI
+        sys.stdout = InputOutput(self.output_queue, "info") # Reassigns functions of stdout to have info printed to be sent to output queue
+        sys.stderr = InputOutput(self.output_queue, "error") # Reassigns functions of stderr to have errors printed to be sent to output queue
 
+        # Here we run the actual functions 
+        try:
+            from ChipTesting.Integration.RTSStateMachine import RTSStateMachine
+            sm = RTSStateMachine()
+            sm.handle_tray()
+            sm.end_state_machine()
+            self.output_queue.put(("state", "Program ran successfully"))
+            self.status.set("Finished")
+        except SystemExit:
+            self.output_queue.put(("info", "RTSStateMachine.py called sys.exit()"))
+            self.status.set("RTS Quit")
+        except Exception as exc:
+            self.output_queue.put(("error", f"Exception: {type(exc).__name__}: {exc}")) # Sends to output queue what type of error and name of error recieved
+            import traceback
+            self.output_queue.put(("error", traceback.format_exc())) # Sends to output queue where error occured for troubleshooting
+            self.status.set("Error")
+        # Ensures that original input(), sys.stdout, and sys.stderr are restored as to prevent those calls being written to a dead queue
+        finally: 
+            builtins.input = original_input
+            sys.stdout = original_stdout
+            sys.stderr = original_stderr
+            self.output_queue.put(("__done__", ""))
 
-        return
+    # Main thread
+    def poll(self):
+        try:
+            item  = self.output_queue.get_nowait()
+            tag, text = item
+            if tag == "__done__":
+                self.running = False
+                self.run_button.configure(state = "normal")
+                self.abort_button.configure(state = "disabled")
+                self.set_input_active(False)
+            elif tag == "prompt":
+                self.append_output(f"?, {text}", "prompt")
+                self.set_input_active(True, text)
+            else:
+                self.append_output(text, tag)
+        except queue.Empty:
+            pass
+        self.after(40, self.poll) # Call the poll function every 40 ms so that main thread keeps checking worker thread
+                
 
 
 # Starts this program
