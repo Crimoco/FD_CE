@@ -150,14 +150,17 @@ class ChipTestingGUI(tk.Tk):
         ttk.Radiobutton(row0, text = "Yes", variable = self.bypass_rts_variable, value = "y").grid(row = 1, column = 1, sticky = "w")
         ttk.Radiobutton(row0, text = "No", variable = self.bypass_rts_variable, value = "n").grid(row = 1, column = 2, sticky = "w")
 
+        ttk.Label(row0, text="Tester Username:").grid(row = 2, column = 0, sticky = "w", pady = 4)
+        self.username_variable = tk.StringVar(value = "")
+        ttk.Entry(row0, textvariable = self.username_variable, width = 15).grid(row = 2, column = 1, columnspan = 2, sticky = "w", padx =4 )
 
-        ttk.Label(row0, text = "Populate mode:").grid(row = 2, column = 0, sticky = "w")
+        ttk.Label(row0, text = "Populate mode:").grid(row = 3, column = 0, sticky = "w")
         self.populate_mode = tk.StringVar(value = "f")
-        ttk.Radiobutton(row0, text = "Full tray", variable = self.populate_mode, value = "f", command  = self.show_start_pos_frame).grid(row = 2, column = 1, sticky = "w")
-        ttk.Radiobutton(row0, text = "Manual", variable = self.populate_mode, value = "m", command  = self.show_start_pos_frame).grid(row = 2, column = 2, sticky = "w")
-        ttk.Radiobutton(row0, text = "Partial", variable = self.populate_mode, value = "p", command  = self.show_start_pos_frame).grid(row = 2, column  = 3, sticky = "w")
-        ttk.Radiobutton(row0, text = "Retest Tray", variable = self.populate_mode, value = "r", command  = self.show_start_pos_frame).grid(row = 2, column  = 4, sticky = "w")
-        ttk.Radiobutton(row0, text = "Retest Partial Tray", variable = self.populate_mode, value = "rp", command  = self.show_start_pos_frame).grid(row = 2, column  = 5, sticky = "w")
+        ttk.Radiobutton(row0, text = "Full tray", variable = self.populate_mode, value = "f", command  = self.show_start_pos_frame).grid(row = 3, column = 1, sticky = "w")
+        ttk.Radiobutton(row0, text = "Manual", variable = self.populate_mode, value = "m", command  = self.show_start_pos_frame).grid(row = 3, column = 2, sticky = "w")
+        ttk.Radiobutton(row0, text = "Partial", variable = self.populate_mode, value = "p", command  = self.show_start_pos_frame).grid(row = 3, column  = 3, sticky = "w")
+        ttk.Radiobutton(row0, text = "Retest Tray", variable = self.populate_mode, value = "r", command  = self.show_start_pos_frame).grid(row = 3, column  = 4, sticky = "w")
+        ttk.Radiobutton(row0, text = "Retest Partial Tray", variable = self.populate_mode, value = "rp", command  = self.show_start_pos_frame).grid(row = 3, column  = 5, sticky = "w")
 
         self.start_pos_frame = ttk.LabelFrame(intro, text = "Start Position")
         pos_row = ttk.Frame(self.start_pos_frame)
@@ -327,6 +330,7 @@ class ChipTestingGUI(tk.Tk):
         set_up_answers = {
             "simulation_mode_answer": self.simulation_variable.get(),
             "bypass_rts_answer": self.bypass_rts_variable.get(),
+            "username_answer": self.username_variable.get(),
             "populate_mode_answer": self.populate_mode.get(),
             "start_tray": self.start_tray.get(),
             "start_column": self.start_column.get(),
@@ -362,6 +366,7 @@ class ChipTestingGUI(tk.Tk):
         startup_queue = queue.Queue()
         startup_queue.put(set_up_answers["simulation_mode_answer"]) 
         startup_queue.put(set_up_answers["bypass_rts_answer"])
+        startup_queue.put(set_up_answers["username_answer"])
         startup_queue.put(set_up_answers["populate_mode_answer"])
 
         if set_up_answers["populate_mode_answer"] == "m" and chip_list: # If populate mode is set to manual and there is a chip_list specified
