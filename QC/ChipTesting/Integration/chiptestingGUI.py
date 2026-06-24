@@ -193,13 +193,13 @@ class ChipTestingGUI(tk.Tk):
 
 
         self.chip_row_frame = ttk.LabelFrame(intro, text = "Manual Chip Data Entry (Use only when in manual populate mode)").pack(fill = "x", padx = 6, pady = 4)
-        data_entry_headers = ["Tray", "Column", "Row", "DAT", "DAT Socket", "Label", "Delete"]
+        data_entry_headers = ["Tray", "Column", "Row", "DAT", "DAT Socket", "Delete"]
 
 
         self.chip_row_frame = ttk.LabelFrame(intro, text = "Manual Chip Data Entry (Use only when in manual populate mode)")
         self.chip_row_frame.pack(fill = "x", padx = 6, pady = 4)
         
-        data_entry_headers = ["#", "Tray", "Column", "Row", "DAT", "DAT Socket", "Label", "Delete"]
+        data_entry_headers = ["#", "Tray", "Column", "Row", "DAT", "DAT Socket", "Delete"]
         # Creates tuple for each entry in data_entry_headers to create a column for each 
         for col, header in enumerate(data_entry_headers):
             ttk.Label(self.chip_row_frame, text = header, font= ("Helvetica", 10)).grid(row = 0, column = col, padx = 4, pady = 2, sticky = "w")
@@ -244,9 +244,7 @@ class ChipTestingGUI(tk.Tk):
             ("Column", ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]),
             ("Row", ["1", "2", "3", "4"]),
             ("DAT", ["1", "2"]),
-            ("DAT Socket", ["21", "22"]),
-            ("Label", ["CD0", "CD1"])
-
+            ("DAT Socket", ["21", "22"])
         ]):
             v = tk.StringVar(value = vals[0]) # Creates a variable v to hold onto current vals selection
             cb = ttk.Combobox(self.chip_row_frame, textvariable = v, value = vals, width = 12, state = "readonly") # Creates combo widget and forbids picking values out of list
@@ -266,7 +264,7 @@ class ChipTestingGUI(tk.Tk):
             for rd in tmp:
                 self.add_chip_row_from_dict(rd) 
 
-        ttk.Button(self.chip_row_frame, text = "X", width = 2, command = remove).grid(row = current_row_count, column = 7, padx = 4)
+        ttk.Button(self.chip_row_frame, text = "X", width = 2, command = remove).grid(row = current_row_count, column = 6, padx = 4)
         self.chip_rows.append(row_widgets) 
         self.chip_row_count += 1
 
@@ -318,7 +316,7 @@ class ChipTestingGUI(tk.Tk):
             states_frame.columnconfigure(c, weight = 1) # Makes each column expand equally when window is resized
             self.state_labels[s] = lbl # Saves each label in a dictionary with state name as key for easy access to highlight_state()
 
-        pause_frame = ttk.LabelFrame(intro, text="Pause / Resume Controls  (when system is paused)")
+        pause_frame = ttk.LabelFrame(intro, text = "Pause / Resume Controls  (when system is paused)")
         pause_frame.pack(fill="x", padx=6, pady=(0, 6))
 
         btn_row = ttk.Frame(pause_frame)
@@ -444,7 +442,6 @@ class ChipTestingGUI(tk.Tk):
                 startup_queue.put(chip.get("Row"))
                 startup_queue.put(chip.get("DAT"))
                 startup_queue.put(chip.get("DAT Socket"))
-                startup_queue.put(chip.get("Label"))
                 if i < len(chip_list) - 1:
                     startup_queue.put("y")
                 else:
@@ -473,6 +470,8 @@ class ChipTestingGUI(tk.Tk):
                 self.pause_event.set()  # Signal the worker thread to pause
                 self.output_queue.put(("prompt", prompt.strip())) # Re-ask the prompt after pause is handled
                 answer = provider.ask(prompt)  # Wait for the user to provide input after pause
+
+
         original_input = builtins.input # Saves the functions of the original input()
         original_stdout = sys.stdout # Saves 
         original_stderr = sys.stderr
@@ -506,10 +505,12 @@ class ChipTestingGUI(tk.Tk):
                            hasattr(self_sm.current_state, 'name') and \
                            self_sm.current_state.name.lower() != state_name.lower():
                             return
+                        
                     self.output_queue.put(("__state__", state_name))
                     if original_method:
                         original_method(self_sm)
                 return on_enter
+            
             overrides = {}
             for name in self.state_names:
                 method_name = f"on_enter_{name}"
@@ -574,7 +575,7 @@ class ChipTestingGUI(tk.Tk):
                 self.append_output(text, tag)
         except queue.Empty:
             pass
-        self.after(40, self.poll) # Call the poll function every 40 ms so that main thread keeps checking worker thread
+        self.after(80, self.poll) # Call the poll function every 80 ms so that main thread keeps checking worker thread
                 
 
 
