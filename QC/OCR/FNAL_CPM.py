@@ -136,7 +136,10 @@ def perform_ocr_minicpm(image_path):
     }
   
     # Send the request to MiniCPM API
-    response = requests.post(url, headers=headers, data=json.dumps(data), timeout=30)
+    start_time = time.time()
+    response = requests.post(url, headers=headers, data=json.dumps(data), timeout=200)
+    end_time = time.time()
+    print("***  OCR request took {0:.2f} s ***".format(end_time - start_time))
 
     # Process the response
     if response.status_code == 200:
@@ -150,17 +153,23 @@ def perform_ocr_minicpm(image_path):
         except json.JSONDecodeError as e:
             print(f"Error parsing JSON: {e}")
             print("Error: Unable to process OCR")
-            return
+            return False
         except requests.exceptions.Timeout:
             print('The request timed out')
+            return False
         except requests.exceptions.RequestException as e:
             print(e)
+            return False
         except Exception as e:
             print(e)
+            return False
     else:
         print(f"Error {response.status_code}: {response.text}")
         print("Error: API request failed")
-        return
+
+        return False
+    
+
 
 def validate_COLDATA_OCR(ocr_result, process_id, allow_input=True):
     """
@@ -359,6 +368,7 @@ def RunOCR(image_directory, image_file, ocr_results_dir, to_rts_config=False, so
     if temp_image_path:
         # Perform OCR using MiniCPM
         ocr_result = perform_ocr_minicpm(temp_image_path)
+        #should this fail, then self.sn_ready in the RTSStateMachiene.py will be false, OCR will fail, and burn-in will be skipped
         print(f"OCR: {ocr_result}")
         if ocr_result:
             serial_number, wafer_id, warnings = validate_COLDATA_OCR(ocr_result, image_number, allow_input=True)
@@ -366,6 +376,9 @@ def RunOCR(image_directory, image_file, ocr_results_dir, to_rts_config=False, so
             
             chipinfo_file = SaveChipInfo(image_number, serial_number, wafer_id, ocr_results_dir)
             success = True
+        
+        #############User Prompt fail-safe? (since all we've checke d at this point is the minicpm)
+        ###could also have the program tell us why the minicpm failed?
 
     if to_rts_config:
         WriteToRTSConfig(chipinfo_file, config_file, socket_label)
