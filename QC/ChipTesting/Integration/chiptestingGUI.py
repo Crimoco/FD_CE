@@ -35,11 +35,9 @@ class InputOutput(io.TextIOBase): # Inherits io.TextIOBase so Python treats work
         self.queue = queue # Declares queue
         self.tag = tag # Declares tag
     
-    def write(self, str):
-        if str and str != "\n":
-            self.queue.put((self.tag, str.rstrip("\n"))) # Intercepts print() calls and puts into queue
-        elif str == "\n":
-            pass
+    def write(self, str): # Overrides the write() method of io.TextIOBase to intercept print() calls and put them into the queue
+        if str: # If str is not empty, put into queue
+            self.queue.put((self.tag, str)) # Intercepts print() calls and puts into queue
         return len(str) # Returns number of characters written successfully to prevent error
     def flush(self): # Normally needed to push buffered text to print but no buffer here exists, thus doesn't do anything but please io.TextIOBase
         pass
@@ -381,28 +379,29 @@ class ChipTestingGUI(tk.Tk):
     def send_answer(self, answer): 
         if not self.running:
             return
-        self.append_output(f" > {answer}", "answer") # self.append_ouput will write to CLI with color and timestamp
+        self.append_output(f" > {answer}\n", "answer") # self.append_ouput will write to CLI with color and timestamp
         self.reply_queue.put(answer) # Puts answer into reply queue
         self.set_input_active(False) # Ends active input session to disable text input while RTS State Machine runs
 
     
-    # Adds response onto CLI with a timestamp and coloring based on tag
-    def append_output(self, text, tag = "info"): # Creates timestamp in Hour:Minute:Second
-        visible = ANSI_ESCAPE.sub("", text).strip() # Removes ANSI escape sequences from text to determine if there is any visible text to print
-        if not visible:
+    # Adds response onto CLI coloring based on color tag
+    def append_output(self, text, tag = "info"):
+        if not text:
             return
         
         self.output.configure(state = "normal") # Allows for text to be written on CLI
-        timestamp = datetime.now().strftime("%H:%M:%S") 
-        self.output.insert("end", f"{timestamp} ", tag) # Prints time stamp, space, text and labels information type for coloring
 
         pos = 0 # Keeps track of the current position in the text as we iterate through it
         current_tag = tag # Keeps track of the current tag for coloring, which may change based on ANSI escape sequences
+
         for match in ANSI_ESCAPE.finditer(text): # Iterates through all ANSI escape sequences in the text
             segment = text[pos:match.start()] # Gets the segment of text before the ANSI escape sequence (hi there \x1b[31m red text \x1b[0m back to normal, segment will be " hi there ")
+
             if segment: # If there is a segment of text before the ANSI escape sequence, insert it into the output with the current tag for coloring
                 self.output.insert("end", segment, current_tag) # Inserts the segment into the output with the current tag for coloring
+
             ansi_codes = match.group(1) # Gets the ANSI codes from the escape sequence
+
             for codes in ansi_codes: # Iterates through each ANSI code in the escape sequence to determine the appropriate tag for coloring
                 if codes in (0, ""): # If the ANSI code is 0 or empty, reset the current tag to the original tag (which is passed in as an argument to append_output)
                     current_tag = tag # Resets to the original tag
@@ -413,7 +412,6 @@ class ChipTestingGUI(tk.Tk):
         remainder = text[pos:] # Gets the remainder of the text after the last ANSI escape sequence
         if remainder:
             self.output.insert("end", remainder, current_tag)
-        self.output.insert("end", "\n") # Inserts a newline at the end of the output
 
     # Highlights the current state in the state tab
     def highlight_state(self, state_name):
@@ -488,8 +486,8 @@ class ChipTestingGUI(tk.Tk):
         def gui_input(prompt = ""):
             if not startup_queue.empty():
                 answer = startup_queue.get()
-                self.output_queue.put(("info", f"[auto] {prompt}"))
-                self.output_queue.put(("answer", f" >  {answer}"))
+                self.output_queue.put(("info", f"[auto] {prompt}\n"))
+                self.output_queue.put(("answer", f" >  {answer}\n"))
                 return answer
             # Ask live GUI when startup_queue is empty
             self.output_queue.put(("prompt", prompt))
@@ -552,9 +550,9 @@ class ChipTestingGUI(tk.Tk):
                 self.set_input_active(True)
             elif tag == "__state__":
                 self.highlight_state(text)
-                self.append_output(f"[STATE] {text}", "state")
+                self.append_output(f"[STATE] {text}\n", "state")
             elif tag == "prompt":
-                self.append_output(f"?, {text}", "prompt")
+                self.append_output(f"?, {text}\n", "prompt")
                 self.set_input_active(True, text)
             else:
                 self.append_output(text, tag)
