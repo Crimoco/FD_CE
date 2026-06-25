@@ -6,10 +6,28 @@ import io
 from datetime import datetime
 import queue
 import os 
+import re # Regular expression module for matching ANSI escape sequences
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..')) # Makes ChipTesting findable for python 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..')) # Makes ChipTesting findable for python
 
 from ChipTesting.Integration.RTSStateMachine import RTSStateMachine
+
+ANSI_ESCAPE = re.compile(r'\x1b\[([0-9]*)m') # Regular expression to match ANSI escape sequences for text formatting (like colors) in terminal output
+ANSI_COLOR_MAP = {
+    "31": "ansi_red",
+    "32": "ansi_green",
+    "33": "ansi_yellow",
+    "34": "ansi_blue",
+    "35": "ansi_magenta",
+    "36": "ansi_cyan",
+    "37": "ansi_white",
+    "41": "ansi_bg_red",
+    "42": "ansi_bg_green",
+    "43": "ansi_bg_yellow",
+    "91": "ansi_bright_red",
+    "92": "ansi_bright_green",
+    "93": "ansi_bright_yellow",
+}
 
 # Takes usual console output and puts into a queue that this program will display with GUI
 class InputOutput(io.TextIOBase): # Inherits io.TextIOBase so Python treats worker thread output as an object to insert into queue
@@ -112,6 +130,17 @@ class ChipTestingGUI(tk.Tk):
         self.output.tag_configure("prompt", foreground = "blue", font = ("Courier", 10, "bold"))
         self.output.tag_configure("answer", foreground = "white", font = ("Courier", 10, "bold"))
         self.output.tag_configure("state", foreground = "orange", font = ("Courier", 10, "bold"))
+        # Configures console text to differentiate between ANSI color codes
+        self.output.tag_configure("ansi_blue", foreground = "#5555ff", font=("Courier", 10))
+        self.output.tag_configure("ansi_magenta", foreground = "#ff55ff", font=("Courier", 10))
+        self.output.tag_configure("ansi_cyan", foreground = "#55ffff", font=("Courier", 10))
+        self.output.tag_configure("ansi_white", foreground = "#ffffff", font=("Courier", 10)) 
+        self.output.tag_configure("ansi_green", foreground = "#55ff55", font=("Courier", 10))
+        self.output.tag_configure("ansi_red", foreground = "#ff5555", font=("Courier", 10))
+        self.output.tag_configure("ansi_yellow", foreground = "#ffff55", font=("Courier", 10))
+        self.output.tag_configure("ansi_bg_green", foreground = "white", background="#00aa00", font = ("Courier", 10, "bold"))
+        self.output.tag_configure("ansi_bg_red", foreground = "white", background="#aa0000", font = ("Courier", 10, "bold"))
+        self.output.tag_configure("ansi_bg_yellow", foreground = "black", background="#aaaa00", font = ("Courier", 10, "bold"))
 
         self.input_frame = ttk.LabelFrame(intro, text = "Input Required")
         self.input_frame.pack(fill = "both", padx = 6, pady = 6)
@@ -293,7 +322,7 @@ class ChipTestingGUI(tk.Tk):
 
         self.state_names = [
             "ground", "surveying_sockets", "moving_chip_to_socket",
-            "running_ocr", "testing", "burning_serial_number"
+            "running_ocr", "testing",
             "writing_to_hwdb", "moving_chip_to_tray",
             "reseat", "moving_chip_to_bad_tray", "pause",
             "no_server_connection", "chip_in_socket", "vision_sequence_failed",
@@ -339,7 +368,7 @@ class ChipTestingGUI(tk.Tk):
             self.answer_entry.configure(state = "normal")
         self.pending_prompt = prompt
 
-    # Takes input and makes sure there is an answer, then sanitizes it for send_answer
+    # Takes input and makes sure there is an answer, then calls send_answer
     def submit_answer(self): 
         if not self.waiting_for_input:
             return
@@ -357,13 +386,34 @@ class ChipTestingGUI(tk.Tk):
         self.set_input_active(False) # Ends active input session to disable text input while RTS State Machine runs
 
     
-    # Adds response onto CLI with a timestamp 
+    # Adds response onto CLI with a timestamp and coloring based on tag
     def append_output(self, text, tag = "info"): # Creates timestamp in Hour:Minute:Second
+        visible = ANSI_ESCAPE.sub("", text).strip() # Removes ANSI escape sequences from text to determine if there is any visible text to print
+        if not visible:
+            return
+        
         self.output.configure(state = "normal") # Allows for text to be written on CLI
         timestamp = datetime.now().strftime("%H:%M:%S") 
-        self.output.insert("end", f"{timestamp} {text}\n", tag) # Prints time stamp, space, text and labels information type for coloring
-        #self.output.see("end") # Scrolls down to end of CLI as would a real terminal
-        self.output.configure(state = "disabled")
+        self.output.insert("end", f"{timestamp} ", tag) # Prints time stamp, space, text and labels information type for coloring
+
+        pos = 0 # Keeps track of the current position in the text as we iterate through it
+        current_tag = tag # Keeps track of the current tag for coloring, which may change based on ANSI escape sequences
+        for match in ANSI_ESCAPE.finditer(text): # Iterates through all ANSI escape sequences in the text
+            segment = text[pos:match.start()] # Gets the segment of text before the ANSI escape sequence (hi there \x1b[31m red text \x1b[0m back to normal, segment will be " hi there ")
+            if segment: # If there is a segment of text before the ANSI escape sequence, insert it into the output with the current tag for coloring
+                self.output.insert("end", segment, current_tag) # Inserts the segment into the output with the current tag for coloring
+            ansi_codes = match.group(1) # Gets the ANSI codes from the escape sequence
+            for codes in ansi_codes: # Iterates through each ANSI code in the escape sequence to determine the appropriate tag for coloring
+                if codes in (0, ""): # If the ANSI code is 0 or empty, reset the current tag to the original tag (which is passed in as an argument to append_output)
+                    current_tag = tag # Resets to the original tag
+                elif codes in ANSI_COLOR_MAP: # If the ANSI code is in the ANSI_COLOR_MAP, set the current tag to the corresponding tag for coloring
+                    current_tag = ANSI_COLOR_MAP[codes] # Sets the current tag to the corresponding tag for coloring
+            pos = match.end() # Updates the position to the end of the ANSI escape sequence
+
+        remainder = text[pos:] # Gets the remainder of the text after the last ANSI escape sequence
+        if remainder:
+            self.output.insert("end", remainder, current_tag)
+        self.output.insert("end", "\n") # Inserts a newline at the end of the output
 
     # Highlights the current state in the state tab
     def highlight_state(self, state_name):
@@ -465,9 +515,9 @@ class ChipTestingGUI(tk.Tk):
             
             overrides = {} # Creates a dictionary to hold the overridden on_enter methods for each state
             for name in self.state_names: # Loops through each state name and creates an on_enter method for it, which will send the state name to the output queue and call the original method if it exists
-                method_name = f"on_enter_{name}"
-                original= getattr(RTSStateMachine, method_name, None)
-                overrides[method_name] = make_on_enter(name, original)
+                method_name = f"on_enter_{name}" # Creates the method name for the on_enter method for the state
+                original= getattr(RTSStateMachine, method_name, None) # Gets the original method from RTSStateMachine if it exists, otherwise returns None
+                overrides[method_name] = make_on_enter(name, original) # Creates the on_enter method for the state and adds it to the overrides dictionary
             
             GUIRTSStateMachine = type("GUIRTSStateMachine", (RTSStateMachine,), overrides) # Creates a new class GUIRTSStateMachine that inherits from RTSStateMachine and overrides the on_enter methods to send state information to the output queue
             sm = GUIRTSStateMachine()
