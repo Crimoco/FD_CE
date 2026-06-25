@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..')) # Makes Chi
 
 from ChipTesting.Integration.RTSStateMachine import RTSStateMachine
 
-ANSI_ESCAPE = re.compile(r'\x1b\[([0-9]*)m') # Regular expression to match ANSI escape sequences for text formatting (like colors) in terminal output
+ANSI_ESCAPE = re.compile(r'\x1b\[([0-9;]*)m') # Regular expression to match ANSI escape sequences for text formatting (like colors) in terminal output
 ANSI_COLOR_MAP = {
     "31": "ansi_red",
     "32": "ansi_green",
@@ -400,10 +400,10 @@ class ChipTestingGUI(tk.Tk):
             if segment: # If there is a segment of text before the ANSI escape sequence, insert it into the output with the current tag for coloring
                 self.output.insert("end", segment, current_tag) # Inserts the segment into the output with the current tag for coloring
 
-            ansi_codes = match.group(1) # Gets the ANSI codes from the escape sequence
+            ansi_codes = match.group(1).split(";") # Gets the ANSI codes from the escape sequence
 
             for codes in ansi_codes: # Iterates through each ANSI code in the escape sequence to determine the appropriate tag for coloring
-                if codes in (0, ""): # If the ANSI code is 0 or empty, reset the current tag to the original tag (which is passed in as an argument to append_output)
+                if codes in ("0", ""): # If the ANSI code is 0 or empty, reset the current tag to the original tag (which is passed in as an argument to append_output)
                     current_tag = tag # Resets to the original tag
                 elif codes in ANSI_COLOR_MAP: # If the ANSI code is in the ANSI_COLOR_MAP, set the current tag to the corresponding tag for coloring
                     current_tag = ANSI_COLOR_MAP[codes] # Sets the current tag to the corresponding tag for coloring
