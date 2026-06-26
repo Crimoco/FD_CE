@@ -145,7 +145,7 @@ class ChipTestingGUI(tk.Tk):
         self.output.tag_configure("ansi_bg_red", foreground = "white", background = "#aa0000", font = ("Courier", 10, "bold"))
         self.output.tag_configure("ansi_bg_yellow", foreground = "black", background = "#aaaa00", font = ("Courier", 10, "bold"))
 
-        self.input_frame = ttk.LabelFrame(intro, text = "Input Required")
+        self.input_frame = ttk.LabelFrame(intro, text = "Input")
         self.input_frame.pack(fill = "both", padx = 6, pady = 6)
 
         self.answer_var = tk.StringVar()
@@ -428,6 +428,10 @@ class ChipTestingGUI(tk.Tk):
                 if i < len(lines) - 1:
                     self.output.insert("end", "\n")
 
+        at_bottom = self.output.yview()[1] >= 0.99
+        if at_bottom:
+            self.output.see("end")
+            
         self.output.configure(state = "disabled") # Keep console clean/read-only
 
     # Highlights the current state in the state tab
