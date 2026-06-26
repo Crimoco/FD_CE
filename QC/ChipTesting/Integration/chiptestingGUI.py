@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..')) # Makes Chi
 
 from ChipTesting.Integration.RTSStateMachine import RTSStateMachine
 
-ANSI_ESCAPE = re.compile(r'\x1b\[([0-9;]*)m') # Regular expression to match ANSI escape sequences for text formatting (like colors) in terminal output
+ANSI_ESCAPE = re.compile(r'(?:\x1b|\033)\[([0-9;]*)m') # Regular expression to match ANSI escape sequences for text formatting (like colors) in terminal output
 ANSI_COLOR_MAP = {
     "31": "ansi_red",
     "32": "ansi_green",
@@ -34,10 +34,12 @@ class InputOutput(io.TextIOBase): # Inherits io.TextIOBase so Python treats work
     def __init__(self, queue, tag = "info"): # Takes in queue as argument and makes variable tag for coloring text during CLI output 
         self.queue = queue # Declares queue
         self.tag = tag # Declares tag
+        self.current_ansi_color_tag = None # Initializes current ANSI color tag to None
     
     def write(self, str): # Overrides the write() method of io.TextIOBase to intercept print() calls and put them into the queue
         if str: # If str is not empty, put into queue
-            self.queue.put((self.tag, str)) # Intercepts print() calls and puts into queue
+            active_tag = self.current_ansi_color_tag if self.current_ansi_color_tag else self.tag  # If there is a current ANSI color tag, use it; otherwise, use the default tag
+            self.queue.put((active_tag, str)) # Puts print call with coloring tag into queue
         return len(str) # Returns number of characters written successfully to prevent error
     def flush(self): # Normally needed to push buffered text to print but no buffer here exists, thus doesn't do anything but please io.TextIOBase
         pass
@@ -58,7 +60,7 @@ class ChipTestingGUI(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("DUNE Chip Testing QC")
-        self.geometry('1500x1100')
+        self.geometry('1500x1000')
         self.minsize(1100 , 750)
 
         self.output_queue = queue.Queue() # Carries print call from worker thread to a queue for CLI output
@@ -117,8 +119,8 @@ class ChipTestingGUI(tk.Tk):
 
         # Creates console on right-hand side of GUI
         self.output = scrolledtext.ScrolledText(
-            out_frame, state = "disabled", wrap = "word", 
-            font = ("Helvetica", 9), height = 22, bg = "black", insertbackground = "white"
+            out_frame, state = "disabled", wrap = "word",
+            font = ("Courier", 10), height = 22, bg = "black", fg = "white", insertbackground = "white"
         )
         self.output.pack(fill = "both", expand = True, padx = 4, pady = 4)
 
@@ -129,16 +131,16 @@ class ChipTestingGUI(tk.Tk):
         self.output.tag_configure("answer", foreground = "white", font = ("Courier", 10, "bold"))
         self.output.tag_configure("state", foreground = "orange", font = ("Courier", 10, "bold"))
         # Configures console text to differentiate between ANSI color codes
-        self.output.tag_configure("ansi_blue", foreground = "#5555ff", font=("Courier", 10))
-        self.output.tag_configure("ansi_magenta", foreground = "#ff55ff", font=("Courier", 10))
-        self.output.tag_configure("ansi_cyan", foreground = "#55ffff", font=("Courier", 10))
-        self.output.tag_configure("ansi_white", foreground = "#ffffff", font=("Courier", 10)) 
-        self.output.tag_configure("ansi_green", foreground = "#55ff55", font=("Courier", 10))
-        self.output.tag_configure("ansi_red", foreground = "#ff5555", font=("Courier", 10))
-        self.output.tag_configure("ansi_yellow", foreground = "#ffff55", font=("Courier", 10))
-        self.output.tag_configure("ansi_bg_green", foreground = "white", background="#00aa00", font = ("Courier", 10, "bold"))
-        self.output.tag_configure("ansi_bg_red", foreground = "white", background="#aa0000", font = ("Courier", 10, "bold"))
-        self.output.tag_configure("ansi_bg_yellow", foreground = "black", background="#aaaa00", font = ("Courier", 10, "bold"))
+        self.output.tag_configure("ansi_blue", foreground = "#5555ff", font = ("Courier", 10))
+        self.output.tag_configure("ansi_magenta", foreground = "#ff55ff", font = ("Courier", 10))
+        self.output.tag_configure("ansi_cyan", foreground = "#55ffff", font = ("Courier", 10))
+        self.output.tag_configure("ansi_white", foreground = "#ffffff", font = ("Courier", 10)) 
+        self.output.tag_configure("ansi_green", foreground = "#55ff55", font = ("Courier", 10))
+        self.output.tag_configure("ansi_red", foreground = "#ff5555", font = ("Courier", 10))
+        self.output.tag_configure("ansi_yellow", foreground = "#ffff55", font = ("Courier", 10))
+        self.output.tag_configure("ansi_bg_green", foreground = "white", background = "#00aa00", font = ("Courier", 10, "bold"))
+        self.output.tag_configure("ansi_bg_red", foreground = "white", background = "#aa0000", font = ("Courier", 10, "bold"))
+        self.output.tag_configure("ansi_bg_yellow", foreground = "black", background = "#aaaa00", font = ("Courier", 10, "bold"))
 
         self.input_frame = ttk.LabelFrame(intro, text = "Input Required")
         self.input_frame.pack(fill = "both", padx = 6, pady = 6)
@@ -387,7 +389,7 @@ class ChipTestingGUI(tk.Tk):
     # Adds response onto CLI coloring based on color tag
     def append_output(self, text, tag = "info"):
         if not text:
-            return
+            return tag
         
         self.output.configure(state = "normal") # Allows for text to be written on CLI
 
@@ -412,6 +414,10 @@ class ChipTestingGUI(tk.Tk):
         remainder = text[pos:] # Gets the remainder of the text after the last ANSI escape sequence
         if remainder:
             self.output.insert("end", remainder, current_tag)
+
+        self.output.configure(state = "disabled") # Keep console clean/read-only
+
+        return current_tag  # Returns the original tag for coloring, which may be useful for further processing or logging
 
     # Highlights the current state in the state tab
     def highlight_state(self, state_name):
@@ -555,7 +561,12 @@ class ChipTestingGUI(tk.Tk):
                 self.append_output(f"?, {text}\n", "prompt")
                 self.set_input_active(True, text)
             else:
-                self.append_output(text, tag)
+                final_tag = self.append_output(text, tag) # Calls append_output to write to CLI with coloring and final_tag is the tag that will be used to color subsequent output based on ANSI escape sequences
+                if sys.stdout.queue == self.output_queue and tag != "error":
+                    sys.stdout.current_ansi_color_tag = final_tag if final_tag != "info" else None # If the tag is not "info", set the current ANSI color tag to the final tag for coloring subsequent output
+                elif sys.stderr.queue == self.output_queue and tag == "error": # If the tag is "error", set the current ANSI color tag to the final tag for coloring subsequent output
+                    sys.stderr.current_ansi_color_tag = final_tag if final_tag != "error" else None # If the final_tag is not "error", set the current ANSI color tag to the final tag for coloring subsequent output
+                self.set_input_active(True, text)
         except queue.Empty:
             pass
         self.after(80, self.poll) # Call the poll function every 80 ms so that main thread keeps checking worker thread
