@@ -37,8 +37,7 @@ class InputOutput(io.TextIOBase): # Inherits io.TextIOBase so Python treats work
     
     def write(self, str): # Overrides the write() method of io.TextIOBase to intercept print() calls and put them into the queue
         if str: # If str is not empty, put into queue
-            if ANSI_ESCAPE.search(str): # If str contains ANSI escape sequences, we need to handle them differently
-                self.queue.put((self.tag, str)) # Puts print call with coloring tag into queue
+            self.queue.put((self.tag, str)) # Puts print call with coloring tag into queue
         return len(str) # Returns number of characters written successfully to prevent error
     def flush(self): # Normally needed to push buffered text to print but no buffer here exists, thus doesn't do anything but please io.TextIOBase
         pass
@@ -399,7 +398,7 @@ class ChipTestingGUI(tk.Tk):
             segment = text[pos:match.start()] # Gets the segment of text before the ANSI escape sequence (hi there \x1b[31m red text \x1b[0m back to normal, segment will be " hi there ")
 
             if segment: # If there is a segment of text before the ANSI escape sequence, insert it into the output with the current tag for coloring
-                lines = segment.split("\n")
+                lines = segment.split("\n") # Splits the segment into lines to handle newlines properly
                 for i, line in enumerate(lines):
                     if line:
                         self.output.insert("end", line, current_tag)
@@ -507,6 +506,7 @@ class ChipTestingGUI(tk.Tk):
             # Ask live GUI when startup_queue is empty
             self.output_queue.put(("prompt", prompt))
             answer = provider.ask(prompt) # Calls GUIInputProvider.ask() to put prompt into input_queue and wait for reply_queue to get answer 
+            return answer
 
 
         original_input = builtins.input # Saves the functions of the original input()
