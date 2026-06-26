@@ -34,12 +34,11 @@ class InputOutput(io.TextIOBase): # Inherits io.TextIOBase so Python treats work
     def __init__(self, queue, tag = "info"): # Takes in queue as argument and makes variable tag for coloring text during CLI output 
         self.queue = queue # Declares queue
         self.tag = tag # Declares tag
-        self.current_ansi_color_tag = None # Initializes current ANSI color tag to None
     
     def write(self, str): # Overrides the write() method of io.TextIOBase to intercept print() calls and put them into the queue
         if str: # If str is not empty, put into queue
-            active_tag = self.current_ansi_color_tag if self.current_ansi_color_tag else self.tag  # If there is a current ANSI color tag, use it; otherwise, use the default tag
-            self.queue.put((active_tag, str)) # Puts print call with coloring tag into queue
+            if ANSI_ESCAPE.search(str): # If str contains ANSI escape sequences, we need to handle them differently
+                self.queue.put((self.tag, str)) # Puts print call with coloring tag into queue
         return len(str) # Returns number of characters written successfully to prevent error
     def flush(self): # Normally needed to push buffered text to print but no buffer here exists, thus doesn't do anything but please io.TextIOBase
         pass
@@ -389,7 +388,7 @@ class ChipTestingGUI(tk.Tk):
     # Adds response onto CLI coloring based on color tag
     def append_output(self, text, tag = "info"):
         if not text:
-            return tag
+            return
         
         self.output.configure(state = "normal") # Allows for text to be written on CLI
 
@@ -400,7 +399,13 @@ class ChipTestingGUI(tk.Tk):
             segment = text[pos:match.start()] # Gets the segment of text before the ANSI escape sequence (hi there \x1b[31m red text \x1b[0m back to normal, segment will be " hi there ")
 
             if segment: # If there is a segment of text before the ANSI escape sequence, insert it into the output with the current tag for coloring
-                self.output.insert("end", segment, current_tag) # Inserts the segment into the output with the current tag for coloring
+                lines = segment.split("\n")
+                for i, line in enumerate(lines):
+                    if line:
+                        self.output.insert("end", line, current_tag)
+                    if i < len(lines) - 1:
+                        self.output.insert("end", "\n", tag) # Reset to base tag on newline
+                        current_tag = tag # Fallback to default tag for the next line
 
             ansi_codes = match.group(1).split(";") # Gets the ANSI codes from the escape sequence
 
@@ -413,11 +418,15 @@ class ChipTestingGUI(tk.Tk):
 
         remainder = text[pos:] # Gets the remainder of the text after the last ANSI escape sequence
         if remainder:
-            self.output.insert("end", remainder, current_tag)
+            lines = remainder.split("\n")
+            for i, line in enumerate(lines):
+                if line:
+                    self.output.insert("end", line, current_tag)
+                if i < len(lines) - 1:
+                    self.output.insert("end", "\n", tag)
+                    current_tag = tag
 
         self.output.configure(state = "disabled") # Keep console clean/read-only
-
-        return current_tag  # Returns the original tag for coloring, which may be useful for further processing or logging
 
     # Highlights the current state in the state tab
     def highlight_state(self, state_name):
@@ -561,12 +570,7 @@ class ChipTestingGUI(tk.Tk):
                 self.append_output(f"?, {text}\n", "prompt")
                 self.set_input_active(True, text)
             else:
-                final_tag = self.append_output(text, tag) # Calls append_output to write to CLI with coloring and final_tag is the tag that will be used to color subsequent output based on ANSI escape sequences
-                if sys.stdout.queue == self.output_queue and tag != "error":
-                    sys.stdout.current_ansi_color_tag = final_tag if final_tag != "info" else None # If the tag is not "info", set the current ANSI color tag to the final tag for coloring subsequent output
-                elif sys.stderr.queue == self.output_queue and tag == "error": # If the tag is "error", set the current ANSI color tag to the final tag for coloring subsequent output
-                    sys.stderr.current_ansi_color_tag = final_tag if final_tag != "error" else None # If the final_tag is not "error", set the current ANSI color tag to the final tag for coloring subsequent output
-                self.set_input_active(True, text)
+                self.append_output(text, tag)
         except queue.Empty:
             pass
         self.after(80, self.poll) # Call the poll function every 80 ms so that main thread keeps checking worker thread
