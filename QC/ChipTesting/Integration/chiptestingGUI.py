@@ -403,8 +403,7 @@ class ChipTestingGUI(tk.Tk):
                     if line:
                         self.output.insert("end", line, current_tag)
                     if i < len(lines) - 1:
-                        self.output.insert("end", "\n", tag) # Reset to base tag on newline
-                        current_tag = tag # Fallback to default tag for the next line
+                        self.output.insert("end", "\n")
 
             ansi_codes = match.group(1).split(";") # Gets the ANSI codes from the escape sequence
 
@@ -422,8 +421,7 @@ class ChipTestingGUI(tk.Tk):
                 if line:
                     self.output.insert("end", line, current_tag)
                 if i < len(lines) - 1:
-                    self.output.insert("end", "\n", tag)
-                    current_tag = tag
+                    self.output.insert("end", "\n")
 
         self.output.configure(state = "disabled") # Keep console clean/read-only
 
