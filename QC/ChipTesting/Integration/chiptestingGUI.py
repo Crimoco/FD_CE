@@ -7,6 +7,8 @@ from datetime import datetime
 import queue
 import os 
 import re # Regular expression module for matching ANSI escape sequences
+import matplotlib
+matplotlib.use("Agg") # Use the Agg backend for matplotlib to avoid GUI issues in headless environments
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..')) # Makes ChipTesting findable for python
 
@@ -160,7 +162,7 @@ class ChipTestingGUI(tk.Tk):
 
     # Set Up tab
     def build_set_up_tab(self):
-        intro = ttk.LabelFrame(self.set_up_tab, text = "Set Up Confguration")
+        intro = ttk.LabelFrame(self.set_up_tab, text = "Set Up Configuration")
         intro.pack(fill = "x", padx = 6, pady = 4)
 
         # Creates Frame for start up configuration as well as buttons for y/n or m/f
@@ -268,7 +270,7 @@ class ChipTestingGUI(tk.Tk):
             ("DAT Socket", ["21", "22"])
         ]):
             v = tk.StringVar(value = vals[0]) # Creates a variable v to hold onto current vals selection
-            cb = ttk.Combobox(self.chip_row_frame, textvariable = v, value = vals, width = 12, state = "readonly") # Creates combo widget and forbids picking values out of list
+            cb = ttk.Combobox(self.chip_row_frame, textvariable = v, values = vals, width = 12, state = "readonly") # Creates combo widget and forbids picking values out of list
             cb.grid(row = current_row_count, column = column_counter + 1, padx = 4, pady = 2) # places combo box in the right cell
             row_widgets[key] = v # Saves tk.StringVar under its field name in the dictionary (Useful to read value user picked)
 
