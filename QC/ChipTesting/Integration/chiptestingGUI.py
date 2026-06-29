@@ -60,7 +60,7 @@ class ChipTestingGUI(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("DUNE Chip Testing QC")
-        self.geometry('1500x1000')
+        self.geometry('1500x700')
         self.minsize(1100 , 750)
 
         self.output_queue = queue.Queue() # Carries print call from worker thread to a queue for CLI output
@@ -175,6 +175,8 @@ class ChipTestingGUI(tk.Tk):
                    command=lambda: self.send_answer("3")).pack(side = "left", padx = 4)
         ttk.Button(btn_row, text="4 · Quit",            width = 20,
                    command=lambda: self.send_answer("4")).pack(side = "left", padx = 4)
+        
+        btn_row.pack_forget()
 
         self.set_input_active(False) # To initialize with input frame without any text
 
@@ -393,6 +395,7 @@ class ChipTestingGUI(tk.Tk):
             self.paused = False
             self.status.set("Running")
             self.pause_button.configure(state = "normal")
+            self.pause_button.configure(text = "⏸ Pause", command = self.request_pause, state = "normal")
 
     
     # Adds response onto CLI coloring based on color tag
@@ -572,7 +575,7 @@ class ChipTestingGUI(tk.Tk):
                             self.output_queue.put(("__paused__", ""))
 
                             sm.on_enter_pause()
-                            
+
                         if sm.current_state.id == "ground" and len(sm.chip_positions['col']) > 0:
                             sm.cycle()
                         elif sm.current_state.id == "moving_chip_to_tray":
@@ -624,8 +627,7 @@ class ChipTestingGUI(tk.Tk):
             elif tag == "__paused__":
                 self.paused = True
                 self.status.set("Paused")
-                self.run_button.configure(state = "normal")
-                self.pause_button.configure(text = "▶ Resume", command = self.resume_run, state = "normal")
+                self.set_input_active(True, "System paused. Please select an option below to continue.")
             elif tag == "__state__":
                 self.highlight_state(text)
                 self.append_output(f"[STATE] {text}\n", "state")
