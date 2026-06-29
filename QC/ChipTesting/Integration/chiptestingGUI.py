@@ -69,6 +69,8 @@ class ChipTestingGUI(tk.Tk):
 
         self.worker = None # Holds down variable for thread.Threading() for when I define it as a thread as the program starts
         self.running = False # Track whether there is a current QC test going on and to prevent a second run
+        self.paused = False # Track whether the program is paused and to prevent a second pause
+        self.pause_requested = threading.Event() # Event to signal when a pause is requested
         self.waiting_for_input = False # Variable to track when waiting for input. Trigger variable to send reply out of queue
         self.pending_prompt = "" # Holds prompt as a string in order to make reading prompt easier. Will use this for making buttons usable
         self.build_UI()
@@ -87,7 +89,7 @@ class ChipTestingGUI(tk.Tk):
         
         self.run_button = ttk.Button(top_hotbar, text = "▶ Run", state = "normal", command = self.run)
         self.run_button.pack(side = "left", padx = 4, pady = 4)
-        self.pause_button = ttk.Button(top_hotbar, text  = "⏹ Pause", state = "disabled")
+        self.pause_button = ttk.Button(top_hotbar, text  = "⏸ Pause", state = "disabled", command = self.request_pause)
         self.pause_button.pack(side = "left", padx = 4, pady = 4)
 
         self.status = tk.StringVar(value = "Idle")
@@ -159,6 +161,20 @@ class ChipTestingGUI(tk.Tk):
         self.answer_entry.pack(side = "left", pady = 6)
         self.submit_button = ttk.Button(input_row, text = "Submit", command = self.submit_answer, state = "normal") # self.submit_answer to be a function that passed text into response_queue
         self.submit_button.pack(side = "left", padx = 6, pady = 6)
+
+        pause_frame = ttk.LabelFrame(intro, text = "Pause / Resume Controls  (when system is paused)")
+        pause_frame.pack(fill="x", padx=6, pady=(0, 6))
+
+        btn_row = ttk.Frame(pause_frame)
+        btn_row.pack(padx = 6, pady= 6)
+        ttk.Button(btn_row, text="1 · Ground", width = 20,
+                   command=lambda: self.send_answer("1")).pack(side = "left", padx = 4)
+        ttk.Button(btn_row, text="2 · Previous state",  width = 20,
+                   command=lambda: self.send_answer("2")).pack(side = "left", padx = 4)
+        ttk.Button(btn_row, text="3 · Next in cycle",   width = 20,
+                   command=lambda: self.send_answer("3")).pack(side = "left", padx = 4)
+        ttk.Button(btn_row, text="4 · Quit",            width = 20,
+                   command=lambda: self.send_answer("4")).pack(side = "left", padx = 4)
 
         self.set_input_active(False) # To initialize with input frame without any text
 
@@ -342,20 +358,6 @@ class ChipTestingGUI(tk.Tk):
             states_frame.columnconfigure(c, weight = 1) # Makes each column expand equally when window is resized
             self.state_labels[s] = lbl # Saves each label in a dictionary with state name as key for easy access to highlight_state()
 
-        pause_frame = ttk.LabelFrame(intro, text = "Pause / Resume Controls  (when system is paused)")
-        pause_frame.pack(fill="x", padx=6, pady=(0, 6))
-
-        btn_row = ttk.Frame(pause_frame)
-        btn_row.pack(padx = 6, pady= 6)
-        ttk.Button(btn_row, text="1 · Ground", width = 20,
-                   command=lambda: self.send_answer("1")).pack(side = "left", padx = 4)
-        ttk.Button(btn_row, text="2 · Previous state",  width = 20,
-                   command=lambda: self.send_answer("2")).pack(side = "left", padx = 4)
-        ttk.Button(btn_row, text="3 · Next in cycle",   width = 20,
-                   command=lambda: self.send_answer("3")).pack(side = "left", padx = 4)
-        ttk.Button(btn_row, text="4 · Quit",            width = 20,
-                   command=lambda: self.send_answer("4")).pack(side = "left", padx = 4)
-    
     # Input/Output helper to determine if waiting for input box is turned off or on and sets up if on
     def set_input_active(self, active, prompt = ""): 
         self.waiting_for_input = active
@@ -387,6 +389,10 @@ class ChipTestingGUI(tk.Tk):
         self.append_output(f" > {answer}\n", "answer") # self.append_ouput will write to CLI with color and timestamp
         self.reply_queue.put(answer) # Puts answer into reply queue
         self.set_input_active(False) # Ends active input session to disable text input while RTS State Machine runs
+        if self.paused:
+            self.paused = False
+            self.status.set("Running")
+            self.pause_button.configure(state = "normal")
 
     
     # Adds response onto CLI coloring based on color tag
@@ -442,11 +448,20 @@ class ChipTestingGUI(tk.Tk):
             else:
                 lbl.configure(background = "", foreground = "black")
 
+    def request_pause(self):
+        if not self.running or self.paused:
+            return
+        self.pause_requested.set()
+        self.status.set("Pausing...")
+        self.pause_button.configure(state = "disabled")
+
     def run(self):
         # Checks to see if there is already a session in progress, and refuse to start if there is one
         if self.running:
             return
         self.running = True
+        self.paused = False
+        self.pause_requested.clear()
         self.status.set("Running")
         self.run_button.configure(state = "disabled")
         self.pause_button.configure(state = "normal")
@@ -466,13 +481,13 @@ class ChipTestingGUI(tk.Tk):
 
         self.worker = threading.Thread( 
             target = self.worker_thread, # Has self.worker_thread be the function of self.worker (what the thread should execute and behave)
-            args = (set_up_answers, chip_list), 
+            args = (set_up_answers, chip_list, self.pause_requested), 
             daemon = True # Declare self.worker as a daemon so that process shuts off when window is deleted
         )
         self.worker.start()
     
     # This thread inserts start up questions into queue preloaded, puts stdout and stderr into output queue
-    def worker_thread(self, set_up_answers, chip_list):
+    def worker_thread(self, set_up_answers, chip_list, pause_event):
         import builtins
 
         startup_queue = queue.Queue()
@@ -527,6 +542,7 @@ class ChipTestingGUI(tk.Tk):
         # Here we run the actual functions 
         try:
             def make_on_enter(state_name, original_method): # Creates a function that will be called when entering a state, sending the state name to the output queue and calling the original method if it exists
+
                 def on_enter(self_sm): # Defines the on_enter method for the state machine, which will be called when entering a state
                     self.output_queue.put(("__state__", state_name))
                     if original_method:
@@ -541,18 +557,53 @@ class ChipTestingGUI(tk.Tk):
             
             GUIRTSStateMachine = type("GUIRTSStateMachine", (RTSStateMachine,), overrides) # Creates a new class GUIRTSStateMachine that inherits from RTSStateMachine and overrides the on_enter methods to send state information to the output queue
             sm = GUIRTSStateMachine()
-            sm.handle_tray()
+
+            num_chips = len(sm.chip_positions['col'])
+            num_full_cycles = num_chips // 2
+            if num_chips %2 != 0:
+                print("ERROR: Odd number of chips. Two chips must be tested at once.")
+            else:
+                for i in range(num_full_cycles):
+                    print(f"\n--- Processing chip ({i*2+1}&{i*2+2})/{num_chips} ---")
+
+                    while True:
+                        if pause_event.is_set():
+                            pause_event.clear()
+                            self.output_queue.put(("__paused__", ""))
+
+                            sm.on_enter_pause()
+                            
+                        if sm.current_state.id == "ground" and len(sm.chip_positions['col']) > 0:
+                            sm.cycle()
+                        elif sm.current_state.id == "moving_chip_to_tray":
+                            sm.cycle()
+                            break
+                        else:
+                            try:
+                                sm.cycle()
+                            except Exception as state_err:
+                                print(f"Error occurred in state '{sm.current_state.id}': {state_err}") # Prints the state name and error message to the output queue for debugging
+                                raise state_err # Reraises the exception to be caught by the outer try-except block for further handling
+                            
+                    sm.current_chip_index += 2
+                    if sm.current_chip_index >= len(sm.chip_positions['col']): # If the current chip index exceeds the number of chips, reset it to 0 to start over
+                        sm.current_chip_index = 0
+                    print(f"\nTray processing complete! Processed {num_chips} chips.")
+                            
             sm.end_state_machine()
             self.output_queue.put(("state", "Program ran successfully"))
             self.status.set("Finished")
+
         except SystemExit:
             self.output_queue.put(("info", "RTSStateMachine.py called sys.exit()"))
             self.status.set("RTS Quit")
+
         except Exception as exc:
             self.output_queue.put(("error", f"Exception: {type(exc).__name__}: {exc}")) # Sends to output queue what type of error and name of error recieved
             import traceback
             self.output_queue.put(("error", traceback.format_exc())) # Sends to output queue where error occured for troubleshooting
             self.status.set("Error")
+
         # Ensures that original input(), sys.stdout, and sys.stderr are restored as to prevent those calls being written to a dead queue
         finally: 
             builtins.input = original_input
@@ -567,9 +618,14 @@ class ChipTestingGUI(tk.Tk):
             tag, text = item # Unpacks the tuple into tag and text for coloring and printing
             if tag == "__done__": 
                 self.running = False
+                self.paused = False
                 self.run_button.configure(state = "normal")
-                self.pause_button.configure(state = "disabled")
-                self.set_input_active(True)
+                self.pause_button.configure(text = "⏸ Pause", command = self.request_pause, state = "disabled")
+            elif tag == "__paused__":
+                self.paused = True
+                self.status.set("Paused")
+                self.run_button.configure(state = "normal")
+                self.pause_button.configure(text = "▶ Resume", command = self.resume_run, state = "normal")
             elif tag == "__state__":
                 self.highlight_state(text)
                 self.append_output(f"[STATE] {text}\n", "state")
