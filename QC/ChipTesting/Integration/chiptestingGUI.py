@@ -151,6 +151,7 @@ class ChipTestingGUI(tk.Tk):
         self.input_frame.pack(fill = "both", padx = 6, pady = 6)
 
         self.answer_var = tk.StringVar()
+        self.prompt_var = tk.StringVar(value = "{Waiting for program to ask for input}")
         self.prompt_label = ttk.Label(self.input_frame, textvariable = self.answer_var, font = ("Courier", 10), width = 15, wraplength = 900, justify = "left") # Remember self.answer_var for input func
         self.prompt_label.pack(anchor = "w", padx = 6, pady = 6)
 
@@ -364,13 +365,14 @@ class ChipTestingGUI(tk.Tk):
     def set_input_active(self, active, prompt = ""): 
         self.waiting_for_input = active
         if active: 
-            self.prompt_label.configure(text=f"{prompt}")
+            self.prompt_var.set(prompt)
             self.answer_var.set("")
             self.submit_button.configure(state = "normal")
             self.answer_entry.configure(state = "normal")
             self.answer_entry.focus_set()
         else:
-            self.prompt_label.configure(text = "{Waiting for program to ask for input}")
+            self.prompt_var.set("{Waiting for program to ask for input}")
+            self.answer_var.set("")
             self.submit_button.configure(state = "normal")
             self.answer_entry.configure(state = "normal")
         self.pending_prompt = prompt
@@ -578,12 +580,15 @@ class ChipTestingGUI(tk.Tk):
 
                         if sm.current_state.id == "ground" and len(sm.chip_positions['col']) > 0:
                             sm.cycle()
+                            self.pause_button.configure(state = "normal")
                         elif sm.current_state.id == "moving_chip_to_tray":
                             sm.cycle()
+                            self.pause_button.configure(state = "normal")
                             break
                         else:
                             try:
                                 sm.cycle()
+                                self.pause_button.configure(state = "normal")
                             except Exception as state_err:
                                 print(f"Error occurred in state '{sm.current_state.id}': {state_err}") # Prints the state name and error message to the output queue for debugging
                                 raise state_err # Reraises the exception to be caught by the outer try-except block for further handling
@@ -623,7 +628,7 @@ class ChipTestingGUI(tk.Tk):
                 self.running = False
                 self.paused = False
                 self.run_button.configure(state = "normal")
-                self.pause_button.configure(text = "⏸ Pause", command = self.request_pause, state = "disabled")
+                self.pause_button.configure("disabled")
             elif tag == "__paused__":
                 self.paused = True
                 self.status.set("Paused")
