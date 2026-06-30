@@ -236,11 +236,6 @@ class ChipTestingGUI(tk.Tk):
 
         self.start_pos_frame.pack_forget()
 
-
-        self.chip_row_frame = ttk.LabelFrame(intro, text = "Manual Chip Data Entry (Use only when in manual populate mode)").pack(fill = "x", padx = 6, pady = 4)
-        data_entry_headers = ["Tray", "Column", "Row", "DAT", "DAT Socket", "Delete"]
-
-
         self.chip_row_frame = ttk.LabelFrame(intro, text = "Manual Chip Data Entry (Use only when in manual populate mode)")
         self.chip_row_frame.pack(fill = "x", padx = 6, pady = 4)
         
@@ -373,8 +368,8 @@ class ChipTestingGUI(tk.Tk):
         else:
             self.prompt_var.set("{Waiting for program to ask for input}")
             self.answer_var.set("")
-            self.submit_button.configure(state = "normal")
-            self.answer_entry.configure(state = "normal")
+            self.submit_button.configure(state = "disabled")
+            self.answer_entry.configure(state = "disabled")
         self.pending_prompt = prompt
 
     # Takes input and makes sure there is an answer, then calls send_answer
@@ -586,7 +581,7 @@ class ChipTestingGUI(tk.Tk):
                             pause_event.clear()
                             self.output_queue.put(("__paused__", ""))
 
-                            sm.on_enter_pause()
+                            sm.pause_cycle() # Calls the pause_cycle method of the state machine to pause the current cycle and wait for user input
 
                         if sm.current_state.id == "ground" and len(sm.chip_positions['col']) > 0: # If the current state is "ground" and there are chips to process, we can proceed to the next state
                             sm.cycle()
