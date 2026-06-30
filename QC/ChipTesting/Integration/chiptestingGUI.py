@@ -152,7 +152,7 @@ class ChipTestingGUI(tk.Tk):
 
         self.answer_var = tk.StringVar()
         self.prompt_var = tk.StringVar(value = "{Waiting for program to ask for input}")
-        self.prompt_label = ttk.Label(self.input_frame, textvariable = self.prompt_var, font = ("Courier", 10), width = 15, wraplength = 900, justify = "left") # Remember self.answer_var for input func
+        self.prompt_label = ttk.Label(self.input_frame, textvariable = self.prompt_var, font = ("Courier", 10), width = 40, wraplength = 900, justify = "left") # Remember self.answer_var for input func
         self.prompt_label.pack(anchor = "w", padx = 6, pady = 6)
 
         input_row = ttk.Frame(self.input_frame)
@@ -521,9 +521,11 @@ class ChipTestingGUI(tk.Tk):
 
         provider = GUIInputProvider(self.input_queue, self.reply_queue) # Creates the live GUI input provider
 
+        startup_phase = {"active": True} # Keeps track of whether we are in the startup phase or not, so that we can disable the input box when we are not in the startup phase
+
         # Answer start up prompts such as "Run in simulation mode", "Bypass RTS?", "Population mode"
         def gui_input(prompt = ""):
-            if not startup_queue.empty():
+            if startup_phase["active"] and not startup_queue.empty():
                 answer = startup_queue.get()
                 self.output_queue.put(("info", f"[auto] {prompt}\n"))
                 self.output_queue.put(("answer", f" >  {answer}\n"))
@@ -560,6 +562,8 @@ class ChipTestingGUI(tk.Tk):
             
             GUIRTSStateMachine = type("GUIRTSStateMachine", (RTSStateMachine,), overrides) # Creates a new class GUIRTSStateMachine that inherits from RTSStateMachine and overrides the on_enter methods to send state information to the output queue
             sm = GUIRTSStateMachine()
+
+            startup_phase["active"] = False
 
             num_chips = len(sm.chip_positions['col'])
             num_full_cycles = num_chips // 2
