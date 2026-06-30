@@ -166,18 +166,18 @@ class ChipTestingGUI(tk.Tk):
         pause_frame = ttk.LabelFrame(intro, text = "Pause / Resume Controls  (when system is paused)")
         pause_frame.pack(fill="x", padx=6, pady=(0, 6))
 
-        btn_row = ttk.Frame(pause_frame)
-        btn_row.pack(padx = 6, pady= 6)
-        ttk.Button(btn_row, text="1 · Ground", width = 20,
+        self.btn_row = ttk.Frame(pause_frame)
+        self.btn_row.pack(padx = 6, pady= 6)
+        ttk.Button(self.btn_row, text="1 · Ground", width = 20,
                    command=lambda: self.send_answer("1")).pack(side = "left", padx = 4)
-        ttk.Button(btn_row, text="2 · Previous state",  width = 20,
+        ttk.Button(self.btn_row, text="2 · Previous state",  width = 20,
                    command=lambda: self.send_answer("2")).pack(side = "left", padx = 4)
-        ttk.Button(btn_row, text="3 · Next in cycle",   width = 20,
+        ttk.Button(self.btn_row, text="3 · Next in cycle",   width = 20,
                    command=lambda: self.send_answer("3")).pack(side = "left", padx = 4)
-        ttk.Button(btn_row, text="4 · Quit",            width = 20,
+        ttk.Button(self.btn_row, text="4 · Quit",            width = 20,
                    command=lambda: self.send_answer("4")).pack(side = "left", padx = 4)
         
-        btn_row.pack_forget()
+        self.btn_row.pack_forget()
 
         self.set_input_active(False) # To initialize with input frame without any text
 
@@ -457,6 +457,12 @@ class ChipTestingGUI(tk.Tk):
         self.pause_requested.set()
         self.status.set("Pausing...")
         self.pause_button.configure(state = "disabled")
+    
+    def hide_pause_buttons(self):
+        self.btn_row.pack_forget()
+    
+    def show_pause_buttons(self):
+        self.btn_row.pack(padx = 6, pady = 6)
 
     def run(self):
         # Checks to see if there is already a session in progress, and refuse to start if there is one
@@ -598,8 +604,8 @@ class ChipTestingGUI(tk.Tk):
                     sm.current_chip_index += 2
                     if sm.current_chip_index >= len(sm.chip_positions['col']): # If the current chip index exceeds the number of chips, reset it to 0 to start over
                         sm.current_chip_index = 0
-                    print(f"\nTray processing complete! Processed {num_chips} chips.")
-                            
+                        
+            print(f"\nTray processing complete! Processed {num_chips} chips.")
             sm.end_state_machine()
             self.output_queue.put(("state", "Program ran successfully"))
             self.status.set("Finished")
@@ -635,11 +641,13 @@ class ChipTestingGUI(tk.Tk):
                 self.paused = True
                 self.status.set("Paused")
                 self.set_input_active(True, "")
+                self.show_pause_buttons()
             elif tag == "__resumed__":
                 if self.paused:
                     self.paused = False
                     self.status.set("Running")
                 self.pause_button.configure(state = "normal")
+                self.hide_pause_buttons()
             elif tag == "__state__":
                 self.highlight_state(text)
                 self.append_output(f"[STATE] {text}\n", "state")
