@@ -163,21 +163,21 @@ class ChipTestingGUI(tk.Tk):
         self.submit_button = ttk.Button(input_row, text = "Submit", command = self.submit_answer, state = "normal") # self.submit_answer to be a function that passed text into response_queue
         self.submit_button.pack(side = "left", padx = 6, pady = 6)
 
-        pause_frame = ttk.LabelFrame(intro, text = "Pause / Resume Controls  (when system is paused)")
-        pause_frame.pack(fill="x", padx=6, pady=(0, 6))
+        self.pause_frame = ttk.LabelFrame(intro, text = "Pause / Resume Controls  (when system is paused)")
+        self.pause_frame.pack(fill="x", padx=6, pady=(0, 6))
 
-        self.btn_row = ttk.Frame(pause_frame)
-        self.btn_row.pack(padx = 6, pady= 6)
-        ttk.Button(self.btn_row, text="1 · Ground", width = 20,
-                   command=lambda: self.send_answer("1")).pack(side = "left", padx = 4)
-        ttk.Button(self.btn_row, text="2 · Previous state",  width = 20,
-                   command=lambda: self.send_answer("2")).pack(side = "left", padx = 4)
-        ttk.Button(self.btn_row, text="3 · Next in cycle",   width = 20,
-                   command=lambda: self.send_answer("3")).pack(side = "left", padx = 4)
-        ttk.Button(self.btn_row, text="4 · Quit",            width = 20,
-                   command=lambda: self.send_answer("4")).pack(side = "left", padx = 4)
+        btn_row = ttk.Frame(self.pause_frame)
+        btn_row.pack(padx = 6, pady= 6)
+        ttk.Button(btn_row, text="1 · Ground", width = 20,
+                   command = lambda: self.send_answer("1")).pack(side = "left", padx = 4)
+        ttk.Button(btn_row, text="2 · Previous state",  width = 20,
+                   command = lambda: self.send_answer("2")).pack(side = "left", padx = 4)
+        ttk.Button(btn_row, text="3 · Next in cycle",   width = 20,
+                   command = lambda: self.send_answer("3")).pack(side = "left", padx = 4)
+        ttk.Button(btn_row, text="4 · Quit",            width = 20,
+                   command = lambda: self.send_answer("4")).pack(side = "left", padx = 4)
         
-        self.btn_row.pack_forget()
+        self.pause_frame.pack_forget() # Hides pause_frame until program is paused
 
         self.set_input_active(False) # To initialize with input frame without any text
 
@@ -437,7 +437,7 @@ class ChipTestingGUI(tk.Tk):
                 if i < len(lines) - 1:
                     self.output.insert("end", "\n")
 
-        at_bottom = self.output.yview()[1] >= 0.99
+        at_bottom = self.output.yview()[1] >= 0.99 # Checks if the output is scrolled to the bottom (yview returns a tuple of the current view position, where 1.0 is the bottom)
         if at_bottom:
             self.output.see("end")
             
@@ -459,10 +459,12 @@ class ChipTestingGUI(tk.Tk):
         self.pause_button.configure(state = "disabled")
     
     def hide_pause_buttons(self):
-        self.btn_row.pack_forget()
+        self.pause_frame.pack_forget()
+        self.input_frame.pack(fill = "both", padx = 6, pady = 6)
     
     def show_pause_buttons(self):
-        self.btn_row.pack(padx = 6, pady = 6)
+        self.pause_frame.pack(padx = 6, pady = 6)
+        self.input_frame.pack_forget()
 
     def run(self):
         # Checks to see if there is already a session in progress, and refuse to start if there is one
@@ -586,25 +588,25 @@ class ChipTestingGUI(tk.Tk):
 
                             sm.on_enter_pause()
 
-                        if sm.current_state.id == "ground" and len(sm.chip_positions['col']) > 0:
+                        if sm.current_state.id == "ground" and len(sm.chip_positions['col']) > 0: # If the current state is "ground" and there are chips to process, we can proceed to the next state
                             sm.cycle()
                             self.output_queue.put(("__resumed__", ""))
-                        elif sm.current_state.id == "moving_chip_to_tray":
+                        elif sm.current_state.id == "moving_chip_to_tray": # If the current state is "moving_chip_to_tray", we can proceed to the next state
                             sm.cycle()
                             self.output_queue.put(("__resumed__", ""))
-                            break
+                            break 
                         else:
                             try:
                                 sm.cycle()
                                 self.output_queue.put(("__resumed__", ""))
-                            except Exception as state_err:
+                            except Exception as state_err: # Catches any exception that occurs during the state machine cycle and prints the state name and error message to the output queue for debugging
                                 print(f"Error occurred in state '{sm.current_state.id}': {state_err}") # Prints the state name and error message to the output queue for debugging
                                 raise state_err # Reraises the exception to be caught by the outer try-except block for further handling
-                            
+    
                     sm.current_chip_index += 2
                     if sm.current_chip_index >= len(sm.chip_positions['col']): # If the current chip index exceeds the number of chips, reset it to 0 to start over
                         sm.current_chip_index = 0
-                        
+
             print(f"\nTray processing complete! Processed {num_chips} chips.")
             sm.end_state_machine()
             self.output_queue.put(("state", "Program ran successfully"))
@@ -652,7 +654,7 @@ class ChipTestingGUI(tk.Tk):
                 self.highlight_state(text)
                 self.append_output(f"[STATE] {text}\n", "state")
             elif tag == "prompt":
-                self.append_output(f"?, {text}\n", "prompt")
+                self.append_output(f"{text}\n", "prompt")
                 self.set_input_active(True, text)
             else:
                 self.append_output(text, tag)
