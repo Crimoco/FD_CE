@@ -390,6 +390,7 @@ class ChipTestingGUI(tk.Tk):
         self.set_input_active(False) # Ends active input session to disable text input while RTS State Machine runs
         if self.paused:
             self.paused = False
+            self.hide_pause_buttons()
             self.status.set("Running")
 
     
@@ -575,34 +576,44 @@ class ChipTestingGUI(tk.Tk):
             else:
                 for i in range(num_full_cycles):
                     print(f"\n--- Processing chip ({i*2+1}&{i*2+2})/{num_chips} ---")
+                    
+                    aborted_to_ground = False
 
                     while True:
                         if pause_event.is_set():
                             pause_event.clear()
+                            self.after(0, self.show_pause_buttons) # Calls the show_pause_buttons method of the main thread to display the pause buttons in the GUI
                             self.output_queue.put(("__paused__", ""))
 
                             sm.pause_cycle() # Calls the pause_cycle method of the state machine to pause the current cycle and wait for user input
 
+                            self.output_queue.put(("__resumed__", ""))
+
+                            if sm.current_state.id == "ground":
+                                aborted_to_ground = True
+                                break
+
+                            continue
+
                         if sm.current_state.id == "ground" and len(sm.chip_positions['col']) > 0: # If the current state is "ground" and there are chips to process, we can proceed to the next state
                             sm.cycle()
-                            self.output_queue.put(("__resumed__", ""))
                         elif sm.current_state.id == "moving_chip_to_tray": # If the current state is "moving_chip_to_tray", we can proceed to the next state
                             sm.cycle()
-                            self.output_queue.put(("__resumed__", ""))
                             break 
                         else:
                             try:
                                 sm.cycle()
-                                self.output_queue.put(("__resumed__", ""))
                             except Exception as state_err: # Catches any exception that occurs during the state machine cycle and prints the state name and error message to the output queue for debugging
                                 print(f"Error occurred in state '{sm.current_state.id}': {state_err}") # Prints the state name and error message to the output queue for debugging
                                 raise state_err # Reraises the exception to be caught by the outer try-except block for further handling
-    
-                    sm.current_chip_index += 2
-                    if sm.current_chip_index >= len(sm.chip_positions['col']): # If the current chip index exceeds the number of chips, reset it to 0 to start over
-                        sm.current_chip_index = 0
 
-            print(f"\nTray processing complete! Processed {num_chips} chips.")
+                    if not aborted_to_ground:
+                        sm.current_chip_index += 2 # Increments the current chip index by 2 to move to the next pair of chips
+                        if sm.current_chip_index >= len(sm.chip_positions['col']): # If the current chip index exceeds the number of chips, reset it to 0 to start over
+                            sm.current_chip_index = 0
+                    else:
+                        break
+                print(f"\nTray processing complete! Processed {sm.current_chip_index} chips.")
             sm.end_state_machine()
             self.output_queue.put(("state", "Program ran successfully"))
             self.status.set("Finished")
@@ -638,13 +649,11 @@ class ChipTestingGUI(tk.Tk):
                 self.paused = True
                 self.status.set("Paused")
                 self.set_input_active(True, "")
-                self.show_pause_buttons()
             elif tag == "__resumed__":
                 if self.paused:
                     self.paused = False
                     self.status.set("Running")
                 self.pause_button.configure(state = "normal")
-                self.hide_pause_buttons()
             elif tag == "__state__":
                 self.highlight_state(text)
                 self.append_output(f"[STATE] {text}\n", "state")

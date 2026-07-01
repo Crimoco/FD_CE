@@ -40,11 +40,11 @@ class RTSStateMachine(StateMachine):
 
     def __init__(self):
         """Initialize the state machine and prompt for chip population method."""
-        super().__init__()
 
         self.simulation_mode = False
         self.BypassRTS = False
         self.last_normal_state = None
+        self.prior_normal_state = None
         self.upload_to_hwdb = False # Choose to skip uploading to hwdb
         self.current_chip_status = "Good"
 
@@ -67,6 +67,8 @@ class RTSStateMachine(StateMachine):
         self.config_file = "/Users/ppd-cap-WD-137552/FD_CE/QC/ChipTesting/BNL_QC/asic_info.csv"
         self.test_result_dir = "/Users/ppd-cap-WD-137552/Tested/"
         self.sn_ready = True  # Track if OCR was successful
+
+        super().__init__()
 
         # Ask user if they want to run in simulation mode
         while True:
@@ -257,15 +259,18 @@ class RTSStateMachine(StateMachine):
 
     def on_enter_ground(self):
         print("Entering ground state - system ready")
+        self.prior_normal_state = self.last_normal_state
         self.last_normal_state = self.current_state
         self.create_session_folder()
 
     def on_enter_surveying_sockets(self):
         print("Starting to survey sockets")
+        self.prior_normal_state = self.last_normal_state
         self.last_normal_state = self.current_state
 
     def on_enter_moving_chip_to_socket(self):
         print("Moving chips to test socket")
+        self.prior_normal_state = self.last_normal_state
         self.last_normal_state = self.current_state
         self.current_chip_status = "Good"
 
@@ -291,12 +296,16 @@ class RTSStateMachine(StateMachine):
 
     def on_enter_running_ocr(self):
         print("Starting OCR processing to read serial numbers")
+        self.prior_normal_state = self.last_normal_state
         self.last_normal_state = self.current_state
 
         if self.simulation_mode:
             print("[SIMULATION] Running OCR processing")
+            time.sleep(5)
             print("Would have called WaitForPictures() and RunOCR() for chip images")
+            time.sleep(5)
             print("Would have killed Ollama process after OCR completion")
+            time.sleep(5)
         else:
             try:
                 # Check the RobotLog to see if the chip pictures are ready before running OCR
@@ -336,11 +345,14 @@ class RTSStateMachine(StateMachine):
 
     def on_enter_testing(self):
         print("Starting chip testing")
+        self.prior_normal_state = self.last_normal_state
         self.last_normal_state = self.current_state
 
         if self.simulation_mode:
             print("[SIMULATION] Running COLDATA QC tests")
+            time.sleep(5)
             print("Would have called RunCOLDATA_QC(duttype='CD', env='RT', rootdir='C:/Users/RTS/Tested/')")
+            time.sleep(5)
         else:
             print("Running COLDATA QC tests...")
             try:
@@ -358,11 +370,14 @@ class RTSStateMachine(StateMachine):
 
     def on_enter_burning_serial_number(self):
         print("Starting serial number burn-in process")
+        self.prior_normal_state = self.last_normal_state
         self.last_normal_state = self.current_state
 
         if self.simulation_mode:
             print("[SIMULATION] Burning serial number into chip")
+            time.sleep(5)
             print("Would have called BurninSN() with logs and cd_qc_ana from testing phase")
+            time.sleep(5)
         elif self.current_chip_status == "Bad":
             print("QC tests failed for unknown reason, skipping burning serial number...")
         else:
@@ -390,10 +405,12 @@ class RTSStateMachine(StateMachine):
 
     def on_enter_writing_to_hwdb(self):
         print("Writing test results to HWDB")
+        self.prior_normal_state = self.last_normal_state
         self.last_normal_state = self.current_state
 
         if self.simulation_mode:
             print("[SIMULATION] Uploading to HWDB")
+            time.sleep(5)
 
         if self.upload_to_hwdb: 
             try:
@@ -425,6 +442,7 @@ class RTSStateMachine(StateMachine):
 
     def on_enter_moving_chip_to_tray(self):
         print("Moving chips to tray")
+        self.prior_normal_state = self.last_normal_state
         self.last_normal_state = self.current_state
 
 
@@ -506,16 +524,19 @@ class RTSStateMachine(StateMachine):
         print("Error: Failed to upload to HWDB")
 
     def resume_to_previous(self):
-        if self.last_normal_state:
-            self.current_state = self.last_normal_state
+        if self.prior_normal_state:
+            self.current_state = self.prior_normal_state
+            self.cycle()
         else:
-            print("Last normal state not found")
+            print("Prior normal state history not found, falling back to direct assignment.")
+            if self.last_normal_state:
+                self.current_state = self.last_normal_state
 
     def advance_to_next_in_cycle(self):
         if self.last_normal_state is None:
             print("Error: No previous state to resume from")
             return
-        self.resume_to_previous()
+        self.current_state = self.last_normal_state
         try:
             self.cycle()
         except Exception as e:
@@ -538,7 +559,7 @@ class RTSStateMachine(StateMachine):
             try:
                 user_input = input("").strip().lower()
                 if user_input == "1":
-                    self.current_state = self.ground
+                    self.reset_cycle()
                     print(f"Resumed to Ground state")
                     print(f"Current state: {self.current_state}")
                     break
@@ -620,7 +641,7 @@ class RTSStateMachine(StateMachine):
             print("ERROR: Odd number of chips. Two chips must be tested at once.")
             return
         for i in range(num_full_cycles):
-            print(f"\n--- Processing chip ({i+1}&{i+2})/{num_chips} ---")
+            print(f"\n--- Processing chip ({i*2+1}&{i*2+2})/{num_chips} ---")
             self.run_full_cycle()
         print(f"\nTray processing complete! Processed {num_chips} chips.")
 
@@ -987,6 +1008,7 @@ class RTSStateMachine(StateMachine):
         
         if self.simulation_mode:
             print("[SIMULATION] Disconnecting from robot")
+            time.sleep(5)
 
 
     def WriteUserToConfig(self, user_name, config_file):
