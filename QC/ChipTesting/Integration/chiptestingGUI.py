@@ -436,6 +436,11 @@ class ChipTestingGUI(tk.Tk):
         at_bottom = self.output.yview()[1] >= 0.99 # Checks if the output is scrolled to the bottom (yview returns a tuple of the current view position, where 1.0 is the bottom)
         if at_bottom:
             self.output.see("end")
+
+        MAX_LINES = 2000
+        line_count = int(self.output.index('end-1c').split('.')[0])
+        if line_count > MAX_LINES:
+            self.output.delete("1.0", f"{line_count - MAX_LINES}.0")
             
         self.output.configure(state = "disabled") # Keep console clean/read-only
 
