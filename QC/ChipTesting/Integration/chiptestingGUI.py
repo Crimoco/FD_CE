@@ -50,10 +50,12 @@ class GUIInputProvider:
     def __init__(self, prompt_queue, reply_prompt):
         self.prompt_queue = prompt_queue
         self.reply_prompt = reply_prompt
-    def ask(self, prompt = ""):
+    def ask(self, prompt = "", request_id = None):
         self.prompt_queue.put(prompt) # Takes prompt and drops into prompt queue 
-        return self.reply_prompt.get() # Retrieves user input from reply queue
-
+        while True:
+            reply_id, answer = self.reply_prompt.get()
+            if request_id is None or reply_id == request_id:
+                return answer
 # Actual GUI for the program
 class ChipTestingGUI(tk.Tk):
     # Sets initial window parameters
@@ -73,6 +75,7 @@ class ChipTestingGUI(tk.Tk):
         self.pause_requested = threading.Event() # Event to signal when a pause is requested
         self.waiting_for_input = False # Variable to track when waiting for input. Trigger variable to send reply out of queue
         self.pending_prompt = "" # Holds prompt as a string in order to make reading prompt easier. Will use this for making buttons usable
+        self.current_prompt_id = None # Holds the current prompt ID to match with reply ID for when multiple prompts are sent out at once
         self.build_UI()
         self.poll()
 
@@ -386,7 +389,7 @@ class ChipTestingGUI(tk.Tk):
         if not self.running:
             return
         self.append_output(f" > {answer}\n", "answer") # self.append_ouput will write to CLI with color and timestamp
-        self.reply_queue.put(answer) # Puts answer into reply queue
+        self.reply_queue.put((self.current_prompt_id, answer)) # Puts answer into reply queue
         self.set_input_active(False) # Ends active input session to disable text input while RTS State Machine runs
         if self.paused:
             self.paused = False
@@ -531,6 +534,7 @@ class ChipTestingGUI(tk.Tk):
         provider = GUIInputProvider(self.input_queue, self.reply_queue) # Creates the live GUI input provider
 
         startup_phase = {"active": True} # Keeps track of whether we are in the startup phase or not, so that we can disable the input box when we are not in the startup phase
+        prompt_counter = {"n": 0}
 
         # Answer start up prompts such as "Run in simulation mode", "Bypass RTS?", "Population mode"
         def gui_input(prompt = ""):
@@ -540,8 +544,10 @@ class ChipTestingGUI(tk.Tk):
                 self.output_queue.put(("answer", f" >  {answer}\n"))
                 return answer
             # Ask live GUI when startup_queue is empty
-            self.output_queue.put(("prompt", prompt))
-            answer = provider.ask(prompt) # Calls GUIInputProvider.ask() to put prompt into input_queue and wait for reply_queue to get answer 
+            prompt_counter["n"] += 1
+            request_id = prompt_counter["n"]
+            self.output_queue.put("prompt", (request_id,prompt))
+            answer = provider.ask(prompt, request_id) # Calls GUIInputProvider.ask() to put prompt into input_queue and wait for reply_queue to get answer 
             return answer
 
 
@@ -663,8 +669,10 @@ class ChipTestingGUI(tk.Tk):
                 self.highlight_state(text)
                 self.append_output(f"[STATE] {text}\n", "state")
             elif tag == "prompt":
-                self.append_output(f"{text}\n", "prompt")
-                self.set_input_active(True, text)
+                request_id, prompt_text = text # Unpack the (id, prompt) pair so we know which specific input() call this is for
+                self.current_prompt_id = request_id
+                self.append_output(f"{prompt_text}\n", "prompt")
+                self.set_input_active(True, prompt_text)
             else:
                 self.append_output(text, tag)
         except queue.Empty:

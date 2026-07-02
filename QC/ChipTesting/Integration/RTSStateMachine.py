@@ -333,7 +333,23 @@ class RTSStateMachine(StateMachine):
                         self.sn_ready = self.sn_ready and success  # only True if all RunOCR's are successful
                     
                     # Kill Ollama used by OCR
-                    subprocess.run("taskkill /F /IM ollama.exe", shell=True)
+                    result_ollama = subprocess.run(
+                        "taskkill /F /IM ollama.exe", shell=True,
+                        capture_output=True, text=True
+                    )
+                    print(result_ollama.stdout)
+                    if result_ollama.returncode != 0:
+                        print(result_ollama.stderr)
+
+                    result_llama_server = subprocess.run(
+                        "taskkill /F /IM llama-server.exe", shell=True,
+                        capture_output=True, text=True
+                    )
+                    print(result_llama_server.stdout)
+                    if result_llama_server.returncode != 0:
+                        print(result_llama_server.stderr)
+
+                    
                     print("OCR processing completed successfully")
                 else:
                     print("Pictures not ready, OCR processing failed")
