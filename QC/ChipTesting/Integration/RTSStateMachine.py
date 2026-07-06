@@ -40,11 +40,11 @@ class RTSStateMachine(StateMachine):
 
     def __init__(self):
         """Initialize the state machine and prompt for chip population method."""
-        super().__init__()
 
         self.simulation_mode = False
         self.BypassRTS = False
         self.last_normal_state = None
+        self.prior_normal_state = None
         self.upload_to_hwdb = False # Choose to skip uploading to hwdb
         self.current_chip_status = "Good"
 
@@ -67,6 +67,8 @@ class RTSStateMachine(StateMachine):
         self.config_file = "/Users/ppd-cap-WD-137552/FD_CE/QC/ChipTesting/BNL_QC/asic_info.csv"
         self.test_result_dir = "/Users/ppd-cap-WD-137552/Tested/"
         self.sn_ready = True  # Track if OCR was successful
+
+        super().__init__()
 
         # Ask user if they want to run in simulation mode
         while True:
@@ -255,17 +257,26 @@ class RTSStateMachine(StateMachine):
         | no_server_connection.to(ground)
     )
 
+    def report_state_entry(self):
+        pass
+
     def on_enter_ground(self):
         print("Entering ground state - system ready")
+        self.report_state_entry()
+        self.prior_normal_state = self.last_normal_state
         self.last_normal_state = self.current_state
         self.create_session_folder()
 
     def on_enter_surveying_sockets(self):
         print("Starting to survey sockets")
+        self.report_state_entry()
+        self.prior_normal_state = self.last_normal_state
         self.last_normal_state = self.current_state
 
     def on_enter_moving_chip_to_socket(self):
         print("Moving chips to test socket")
+        self.report_state_entry()
+        self.prior_normal_state = self.last_normal_state
         self.last_normal_state = self.current_state
         self.current_chip_status = "Good"
 
@@ -291,12 +302,17 @@ class RTSStateMachine(StateMachine):
 
     def on_enter_running_ocr(self):
         print("Starting OCR processing to read serial numbers")
+        self.report_state_entry()
+        self.prior_normal_state = self.last_normal_state
         self.last_normal_state = self.current_state
 
         if self.simulation_mode:
             print("[SIMULATION] Running OCR processing")
+            time.sleep(5)
             print("Would have called WaitForPictures() and RunOCR() for chip images")
+            time.sleep(5)
             print("Would have killed Ollama process after OCR completion")
+            time.sleep(5)
         else:
             try:
                 # Check the RobotLog to see if the chip pictures are ready before running OCR
@@ -322,11 +338,23 @@ class RTSStateMachine(StateMachine):
                         # Rerun OCR for good chip info since no picture was retaken
                         success = cpm.RunOCR(self.image_directory, self.retest_good_chip_image, self.ocr_results_dir, True, "CD0")
                         self.sn_ready = self.sn_ready and success  # only True if all RunOCR's are successful
-                    
+                   
                     # Kill Ollama used by OCR
-                    subprocess.run("taskkill /F /IM ollama.exe", shell=True)
-                    subprocess.run("taskkill /F /IM llama-server.exe", shell=True)#########
-                    print("OCR processing completed successfully")
+                    result_ollama = subprocess.run(
+                        "taskkill /F /IM ollama.exe", shell=True,
+                        capture_output=True, text=True
+                    )
+                    print(result_ollama.stdout)
+                    if result_ollama.returncode != 0:
+                        print(result_ollama.stderr)
+
+                    result_llama_server = subprocess.run(
+                        "taskkill /F /IM llama-server.exe", shell=True,
+                        capture_output=True, text=True
+                    )
+                    print(result_llama_server.stdout)
+                    if result_llama_server.returncode != 0:
+                        print(result_llama_server.stderr)
                 else:
                     print("Pictures not ready, OCR processing failed")
                     self.sn_ready = False
@@ -337,11 +365,15 @@ class RTSStateMachine(StateMachine):
 
     def on_enter_testing(self):
         print("Starting chip testing")
+        self.report_state_entry()
+        self.prior_normal_state = self.last_normal_state
         self.last_normal_state = self.current_state
 
         if self.simulation_mode:
             print("[SIMULATION] Running COLDATA QC tests")
+            time.sleep(5)
             print("Would have called RunCOLDATA_QC(duttype='CD', env='RT', rootdir='C:/Users/RTS/Tested/')")
+            time.sleep(5)
         else:
             print("Running COLDATA QC tests...")
             try:
@@ -359,11 +391,15 @@ class RTSStateMachine(StateMachine):
 
     def on_enter_burning_serial_number(self):
         print("Starting serial number burn-in process")
+        self.report_state_entry()
+        self.prior_normal_state = self.last_normal_state
         self.last_normal_state = self.current_state
 
         if self.simulation_mode:
             print("[SIMULATION] Burning serial number into chip")
+            time.sleep(5)
             print("Would have called BurninSN() with logs and cd_qc_ana from testing phase")
+            time.sleep(5)
         elif self.current_chip_status == "Bad":
             print("QC tests failed for unknown reason, skipping burning serial number...")
         else:
@@ -391,10 +427,31 @@ class RTSStateMachine(StateMachine):
 
     def on_enter_writing_to_hwdb(self):
         print("Writing test results to HWDB")
+        self.report_state_entry()
+        self.prior_normal_state = self.last_normal_state
         self.last_normal_state = self.current_state
 
         if self.simulation_mode:
             print("[SIMULATION] Uploading to HWDB")
+            time.sleep(5)
+
+        if self.upload_to_hwdb: 
+            try:
+                setup_hwdb = subprocess.run(["wsl", "bash", "-l", "-c", "source /mnt/c/Users/jazielgutierrezvillanueva/FD_CE/HWDBTools/setup_hwdb.sh"])
+                print(setup_hwdb.stdout)
+
+                # Get token for uploading
+                #get_token = subprocess.run(["wsl","bash","-l","-c", "htgettoken --vaultserver=htvaultprod.fnal.gov --issuer=fermilab"], capture_output=True, text=True, check=True)
+                #print(get_token.stdout)
+
+                # Setup exports
+                #setup_hwdb = subprocess.run(["wsl","bash","-l","-c", f"""export TOKENLOC='/run/user/1000/bt_u1000' && export HWDBSELECT='DEV' && export COMMANDVERB='VERB0' && export SITELOC='{self.rts_loc}'"""], capture_output=True, text=True, check=True) # TODO: fix site loc as a variable
+                #print(setup_hwdb.stdout)
+                
+                # Get the latest created folder (should be this current test)
+                test_dirs = [x[0] for x in os.walk(self.test_result_dir)]
+                test_dirs.sort()
+                test_dir = test_dirs[-2] # second to last for one dir up
 
         if self.upload_to_hwdb: 
             try:
@@ -426,6 +483,8 @@ class RTSStateMachine(StateMachine):
 
     def on_enter_moving_chip_to_tray(self):
         print("Moving chips to tray")
+        self.report_state_entry()
+        self.prior_normal_state = self.last_normal_state
         self.last_normal_state = self.current_state
 
 
@@ -447,12 +506,14 @@ class RTSStateMachine(StateMachine):
 
     def on_enter_pause(self):
         print("System paused - awaiting resume command")
+        self.report_state_entry()
         self.pause_with_user_input()
 
     def on_enter_reseat(self):
         print("System reseat initiated - repositioning components")
 
     def on_enter_moving_chip_to_bad_tray(self):
+        self.report_state_entry()
         print("Moved defective chip to bad tray")
 
         badtray_file = "path/to/BadTray.csv"
@@ -469,54 +530,70 @@ class RTSStateMachine(StateMachine):
 
     def on_enter_no_server_connection(self):
         print("Error: No server connection detected")
+        self.report_state_entry()
 
     def on_enter_chip_in_socket(self):
         print("Error: Chip already in socket")
+        self.report_state_entry()
 
     def on_enter_vision_sequence_failed(self):
         print("Error: Vision sequence failed")
+        self.report_state_entry()
 
     def on_enter_no_pressure(self):
         print("Error: No pressure detected")
+        self.report_state_entry()
 
     def on_enter_lost_vacuum(self):
         print("Error: Vacuum system failure")
+        self.report_state_entry()
 
     def on_enter_bad_contact(self):
         print("Error: Bad socket contact")
+        self.report_state_entry()
 
     def on_enter_no_chip(self): 
         print("Error: No chip detected")
+        self.report_state_entry()
 
     def on_enter_safe_guard(self):
         print("Error: Safety guard triggered")
+        self.report_state_entry()
 
     def on_enter_bad_pins(self):
         print("Error: Bad pins detected")
+        self.report_state_entry()
 
     def on_enter_no_serial_number(self):
         print("Error: No serial number")
+        self.report_state_entry()
 
     def on_enter_failed_init(self):
         print("Error: Test initialization failed")
+        self.report_state_entry()
 
     def on_enter_no_wib_connection(self):
         print("Error: No WIB connection")
+        self.report_state_entry()
 
     def on_enter_failed_upload(self):
         print("Error: Failed to upload to HWDB")
+        self.report_state_entry()
 
     def resume_to_previous(self):
-        if self.last_normal_state:
-            self.current_state = self.last_normal_state
+        if self.prior_normal_state:
+            self.current_state = self.prior_normal_state
+            self.cycle()
         else:
-            print("Last normal state not found")
+            print("Prior normal state history not found, falling back to direct assignment.")
+            if self.last_normal_state:
+                self.current_state = self.last_normal_state
 
     def advance_to_next_in_cycle(self):
         if self.last_normal_state is None:
             print("Error: No previous state to resume from")
             return
-        self.resume_to_previous()
+        self.current_state = self.last_normal_state
         try:
             self.cycle()
         except Exception as e:
@@ -539,7 +616,7 @@ class RTSStateMachine(StateMachine):
             try:
                 user_input = input("").strip().lower()
                 if user_input == "1":
-                    self.current_state = self.ground
+                    self.reset_cycle()
                     print(f"Resumed to Ground state")
                     print(f"Current state: {self.current_state}")
                     break
@@ -988,6 +1065,7 @@ class RTSStateMachine(StateMachine):
         
         if self.simulation_mode:
             print("[SIMULATION] Disconnecting from robot")
+            time.sleep(5)
 
 
     def WriteUserToConfig(self, user_name, config_file):
