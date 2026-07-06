@@ -325,6 +325,7 @@ class RTSStateMachine(StateMachine):
                     
                     # Kill Ollama used by OCR
                     subprocess.run("taskkill /F /IM ollama.exe", shell=True)
+                    subprocess.run("taskkill /F /IM llama-server.exe", shell=True)#########
                     print("OCR processing completed successfully")
                 else:
                     print("Pictures not ready, OCR processing failed")
@@ -366,7 +367,7 @@ class RTSStateMachine(StateMachine):
         elif self.current_chip_status == "Bad":
             print("QC tests failed for unknown reason, skipping burning serial number...")
         else:
-            if self.sn_ready:
+            if self.sn_ready: #set to false to skip burning serial number while OCR has issues
                 try:
                     print("Burning serial number into chip...")
                     BurninSN(self.logs, self.cd_qc_ana)
@@ -620,7 +621,7 @@ class RTSStateMachine(StateMachine):
             print("ERROR: Odd number of chips. Two chips must be tested at once.")
             return
         for i in range(num_full_cycles):
-            print(f"\n--- Processing chip ({i+1}&{i+2})/{num_chips} ---")
+            print(f"\n--- Processing chips ({i*2+1}&{i*2+2})/{num_chips} ---")
             self.run_full_cycle()
         print(f"\nTray processing complete! Processed {num_chips} chips.")
 
