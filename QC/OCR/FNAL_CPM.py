@@ -136,7 +136,10 @@ def perform_ocr_minicpm(image_path):
     }
   
     # Send the request to MiniCPM API
-    response = requests.post(url, headers=headers, data=json.dumps(data), timeout=30)
+    start_time = time.time()
+    response = requests.post(url, headers=headers, data=json.dumps(data), timeout=200)
+    end_time = time.time()
+    print("***  OCR request took {0:.2f} s ***".format(end_time - start_time))
 
     # Process the response
     if response.status_code == 200:
@@ -150,17 +153,46 @@ def perform_ocr_minicpm(image_path):
         except json.JSONDecodeError as e:
             print(f"Error parsing JSON: {e}")
             print("Error: Unable to process OCR")
-            return
+            return False
         except requests.exceptions.Timeout:
             print('The request timed out')
+            return False
         except requests.exceptions.RequestException as e:
             print(e)
+            return False
         except Exception as e:
             print(e)
+            return False
     else:
         print(f"Error {response.status_code}: {response.text}")
         print("Error: API request failed")
         return
+    
+def GetUserHelp():
+    """
+    Asks user to input serial number and wafer id manually and returns them.
+    """
+
+    print("User must input the chip information manually. The chips are labeled with four lines:")
+    print("        COLDATA")  
+    print("        WAFER NUMBER (somehting like NBMY62.00)")
+    print("        XXXXX (part of serial number)") 
+    print("        YYYY  (part of serial number)")
+
+    wafer_id = input("Enter the WAFER NUMBER (line 2):")
+    while True:
+        serial_number = input("Enter the serial number (lines 3 and 4, no spaces):")
+        try:
+            if len(serial_number) != 9:
+                raise ValueError("Incorrect number of characters. The serial number must have 9 characters.")
+            elif not serial_number.isnumeric():
+                raise ValueError("Serial number must be an integer.")
+            else:
+                break
+        except Exception as error:
+            print(f"ERROR: {error}. Please try again.")
+
+    return wafer_id, serial_number
 
 def validate_COLDATA_OCR(ocr_result, process_id, allow_input=True):
     """
@@ -358,14 +390,24 @@ def RunOCR(image_directory, image_file, ocr_results_dir, to_rts_config=False, so
     
     if temp_image_path:
         # Perform OCR using MiniCPM
-        ocr_result = perform_ocr_minicpm(temp_image_path)
-        print(f"OCR: {ocr_result}")
-        if ocr_result:
-            serial_number, wafer_id, warnings = validate_COLDATA_OCR(ocr_result, image_number, allow_input=True)
-            [print(w) for w in warnings]
-            
-            chipinfo_file = SaveChipInfo(image_number, serial_number, wafer_id, ocr_results_dir)
+        try:
+            ocr_result = perform_ocr_minicpm(temp_image_path)
+            print(f"OCR: {ocr_result}")
+            if ocr_result:
+                serial_number, wafer_id, warnings = validate_COLDATA_OCR(ocr_result, image_number)
+                [print(w) for w in warnings]
+                success = True
+                
+            else:
+                raise Exception("perform_ocr_minicpm return None")
+        except Exception as e:
+            print(f"ERROR with OCR: {e}")
+            serial_number, wafer_id = GetUserHelp()
             success = True
+
+    if success:
+        chipinfo_file = SaveChipInfo(image_number, serial_number, wafer_id, ocr_results_dir)
+
 
     if to_rts_config:
         WriteToRTSConfig(chipinfo_file, config_file, socket_label)
@@ -475,10 +517,10 @@ if __name__=="__main__":
 
     start_time = time.time()
 
-    image_directory = '/Users/tcontrer/Downloads/' #"/Users/RTS/RTS_data/images/"
+    image_directory = "Users/ppd-cap-WD-137552/RTS_data/images/"
     ocr_results_dir = "Tested/fnal_cpm_results/"
 
-    image_id = "20250402142447_SN"
+    image_id = "20250925094236_tr2_col7_row1_SN"
     RunOCR(image_directory, image_id, ocr_results_dir)
     #image_id = "20250402170946"
     ShowOCRResult(image_id, ocr_results_dir, ocr_results_dir)

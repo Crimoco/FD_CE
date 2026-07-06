@@ -62,10 +62,10 @@ class RTSStateMachine(StateMachine):
         self.current_chip_index = 0
         
         # OCR configuration
-        self.image_directory = "/Users/jazielgutierrezvillanueva/RTS_data/images/"
-        self.ocr_results_dir = "/Users/jazielgutierrezvillanueva/RTS_data/ocr_images/"
-        self.config_file = "/Users/jazielgutierrezvillanueva/FD_CE/QC/ChipTesting/BNL_QC/asic_info.csv"
-        self.test_result_dir = "/Users/jazielgutierrezvillanueva/Tested/"
+        self.image_directory = "/Users/ppd-cap-WD-137552/RTS_data/images/"
+        self.ocr_results_dir = "/Users/ppd-cap-WD-137552/RTS_data/ocr_images/"
+        self.config_file = "/Users/ppd-cap-WD-137552/FD_CE/QC/ChipTesting/BNL_QC/asic_info.csv"
+        self.test_result_dir = "/Users/ppd-cap-WD-137552/Tested/"
         self.sn_ready = True  # Track if OCR was successful
 
         super().__init__()
@@ -338,7 +338,7 @@ class RTSStateMachine(StateMachine):
                         # Rerun OCR for good chip info since no picture was retaken
                         success = cpm.RunOCR(self.image_directory, self.retest_good_chip_image, self.ocr_results_dir, True, "CD0")
                         self.sn_ready = self.sn_ready and success  # only True if all RunOCR's are successful
-                    
+                   
                     # Kill Ollama used by OCR
                     result_ollama = subprocess.run(
                         "taskkill /F /IM ollama.exe", shell=True,
@@ -355,9 +355,6 @@ class RTSStateMachine(StateMachine):
                     print(result_llama_server.stdout)
                     if result_llama_server.returncode != 0:
                         print(result_llama_server.stderr)
-
-                    
-                    print("OCR processing completed successfully")
                 else:
                     print("Pictures not ready, OCR processing failed")
                     self.sn_ready = False
@@ -383,7 +380,7 @@ class RTSStateMachine(StateMachine):
                 self.logs, self.cd_qc_ana = RunCOLDATA_QC(
                     duttype="CD", 
                     env="RT", 
-                    rootdir="/Users/jazielgutierrezvillanueva/Tested/"
+                    rootdir="C:/Users/ppd-cap-WD-137552/Tested/"
                     # pc_wrcfg_fn="/Users/RTS/FD_CE/QC/ChipTesting/asic_info.csv"
                 )
                 print("COLDATA QC tests completed successfully")
@@ -406,7 +403,7 @@ class RTSStateMachine(StateMachine):
         elif self.current_chip_status == "Bad":
             print("QC tests failed for unknown reason, skipping burning serial number...")
         else:
-            if self.sn_ready:
+            if self.sn_ready: #set to false to skip burning serial number while OCR has issues
                 try:
                     print("Burning serial number into chip...")
                     BurninSN(self.logs, self.cd_qc_ana)
@@ -456,8 +453,26 @@ class RTSStateMachine(StateMachine):
                 test_dirs.sort()
                 test_dir = test_dirs[-2] # second to last for one dir up
 
+        if self.upload_to_hwdb: 
+            try:
+                setup_hwdb = subprocess.run(["wsl", "bash", "-l", "-c", "source /mnt/c/Users/ppd-cap-WD-137552/FD_CE/HWDBTools/setup_hwdb.sh"])
+                print(setup_hwdb.stdout)
+
+                # Get token for uploading
+                #get_token = subprocess.run(["wsl","bash","-l","-c", "htgettoken --vaultserver=htvaultprod.fnal.gov --issuer=fermilab"], capture_output=True, text=True, check=True)
+                #print(get_token.stdout)
+
+                # Setup exports
+                #setup_hwdb = subprocess.run(["wsl","bash","-l","-c", f"""export TOKENLOC='/run/user/1000/bt_u1000' && export HWDBSELECT='DEV' && export COMMANDVERB='VERB0' && export SITELOC='{self.rts_loc}'"""], capture_output=True, text=True, check=True) # TODO: fix site loc as a variable
+                #print(setup_hwdb.stdout)
+                
+                # Get the latest created folder (should be this current test)
+                test_dirs = [x[0] for x in os.walk(self.test_result_dir)]
+                test_dirs.sort()
+                test_dir = test_dirs[-2] # second to last for one dir up
+
                 # Upload to hwdb
-                upload_result = subprocess.run([f"python3 /mnt/c/Users/jazielgutierrezvillanueva/FD_CE/HWDBTools/submit_coldata_test.py {self.user_name} {test_dir} {self.rts_loc}"], capture_output=True, text=True, check=True)
+                upload_result = subprocess.run([f"python3 /mnt/c/Users/ppd-cap-WD-137552/FD_CE/HWDBTools/submit_coldata_test.py {self.user_name} {test_dir} {self.rts_loc}"], capture_output=True, text=True, check=True)
                 print(upload_result.stdout)
 
             except Exception as e:
@@ -683,7 +698,7 @@ class RTSStateMachine(StateMachine):
             print("ERROR: Odd number of chips. Two chips must be tested at once.")
             return
         for i in range(num_full_cycles):
-            print(f"\n--- Processing chip ({i*2+1}&{i*2+2})/{num_chips} ---")
+            print(f"\n--- Processing chips ({i*2+1}&{i*2+2})/{num_chips} ---")
             self.run_full_cycle()
         print(f"\nTray processing complete! Processed {num_chips} chips.")
 
