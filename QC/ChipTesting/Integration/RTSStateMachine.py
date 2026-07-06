@@ -62,10 +62,10 @@ class RTSStateMachine(StateMachine):
         self.current_chip_index = 0
         
         # OCR configuration
-        self.image_directory = "/Users/ppd-cap-WD-137552/RTS_data/images/"
-        self.ocr_results_dir = "/Users/ppd-cap-WD-137552/RTS_data/ocr_images/"
-        self.config_file = "/Users/ppd-cap-WD-137552/FD_CE/QC/ChipTesting/BNL_QC/asic_info.csv"
-        self.test_result_dir = "/Users/ppd-cap-WD-137552/Tested/"
+        self.image_directory = "/Users/jazielgutierrezvillanueva/RTS_data/images/"
+        self.ocr_results_dir = "/Users/jazielgutierrezvillanueva/RTS_data/ocr_images/"
+        self.config_file = "/Users/jazielgutierrezvillanueva/FD_CE/QC/ChipTesting/BNL_QC/asic_info.csv"
+        self.test_result_dir = "/Users/jazielgutierrezvillanueva/Tested/"
         self.sn_ready = True  # Track if OCR was successful
 
         super().__init__()
@@ -257,19 +257,25 @@ class RTSStateMachine(StateMachine):
         | no_server_connection.to(ground)
     )
 
+    def report_state_entry(self):
+        pass
+
     def on_enter_ground(self):
         print("Entering ground state - system ready")
+        self.report_state_entry()
         self.prior_normal_state = self.last_normal_state
         self.last_normal_state = self.current_state
         self.create_session_folder()
 
     def on_enter_surveying_sockets(self):
         print("Starting to survey sockets")
+        self.report_state_entry()
         self.prior_normal_state = self.last_normal_state
         self.last_normal_state = self.current_state
 
     def on_enter_moving_chip_to_socket(self):
         print("Moving chips to test socket")
+        self.report_state_entry()
         self.prior_normal_state = self.last_normal_state
         self.last_normal_state = self.current_state
         self.current_chip_status = "Good"
@@ -296,6 +302,7 @@ class RTSStateMachine(StateMachine):
 
     def on_enter_running_ocr(self):
         print("Starting OCR processing to read serial numbers")
+        self.report_state_entry()
         self.prior_normal_state = self.last_normal_state
         self.last_normal_state = self.current_state
 
@@ -361,6 +368,7 @@ class RTSStateMachine(StateMachine):
 
     def on_enter_testing(self):
         print("Starting chip testing")
+        self.report_state_entry()
         self.prior_normal_state = self.last_normal_state
         self.last_normal_state = self.current_state
 
@@ -375,7 +383,7 @@ class RTSStateMachine(StateMachine):
                 self.logs, self.cd_qc_ana = RunCOLDATA_QC(
                     duttype="CD", 
                     env="RT", 
-                    rootdir="C:/Users/ppd-cap-WD-137552/Tested/"
+                    rootdir="/Users/jazielgutierrezvillanueva/Tested/"
                     # pc_wrcfg_fn="/Users/RTS/FD_CE/QC/ChipTesting/asic_info.csv"
                 )
                 print("COLDATA QC tests completed successfully")
@@ -386,6 +394,7 @@ class RTSStateMachine(StateMachine):
 
     def on_enter_burning_serial_number(self):
         print("Starting serial number burn-in process")
+        self.report_state_entry()
         self.prior_normal_state = self.last_normal_state
         self.last_normal_state = self.current_state
 
@@ -421,6 +430,7 @@ class RTSStateMachine(StateMachine):
 
     def on_enter_writing_to_hwdb(self):
         print("Writing test results to HWDB")
+        self.report_state_entry()
         self.prior_normal_state = self.last_normal_state
         self.last_normal_state = self.current_state
 
@@ -430,7 +440,7 @@ class RTSStateMachine(StateMachine):
 
         if self.upload_to_hwdb: 
             try:
-                setup_hwdb = subprocess.run(["wsl", "bash", "-l", "-c", "source /mnt/c/Users/ppd-cap-WD-137552/FD_CE/HWDBTools/setup_hwdb.sh"])
+                setup_hwdb = subprocess.run(["wsl", "bash", "-l", "-c", "source /mnt/c/Users/jazielgutierrezvillanueva/FD_CE/HWDBTools/setup_hwdb.sh"])
                 print(setup_hwdb.stdout)
 
                 # Get token for uploading
@@ -447,7 +457,7 @@ class RTSStateMachine(StateMachine):
                 test_dir = test_dirs[-2] # second to last for one dir up
 
                 # Upload to hwdb
-                upload_result = subprocess.run([f"python3 /mnt/c/Users/ppd-cap-WD-137552/FD_CE/HWDBTools/submit_coldata_test.py {self.user_name} {test_dir} {self.rts_loc}"], capture_output=True, text=True, check=True)
+                upload_result = subprocess.run([f"python3 /mnt/c/Users/jazielgutierrezvillanueva/FD_CE/HWDBTools/submit_coldata_test.py {self.user_name} {test_dir} {self.rts_loc}"], capture_output=True, text=True, check=True)
                 print(upload_result.stdout)
 
             except Exception as e:
@@ -458,6 +468,7 @@ class RTSStateMachine(StateMachine):
 
     def on_enter_moving_chip_to_tray(self):
         print("Moving chips to tray")
+        self.report_state_entry()
         self.prior_normal_state = self.last_normal_state
         self.last_normal_state = self.current_state
 
@@ -480,12 +491,14 @@ class RTSStateMachine(StateMachine):
 
     def on_enter_pause(self):
         print("System paused - awaiting resume command")
+        self.report_state_entry()
         self.pause_with_user_input()
 
     def on_enter_reseat(self):
         print("System reseat initiated - repositioning components")
 
     def on_enter_moving_chip_to_bad_tray(self):
+        self.report_state_entry()
         print("Moved defective chip to bad tray")
 
         badtray_file = "path/to/BadTray.csv"
@@ -502,42 +515,55 @@ class RTSStateMachine(StateMachine):
 
     def on_enter_no_server_connection(self):
         print("Error: No server connection detected")
+        self.report_state_entry()
 
     def on_enter_chip_in_socket(self):
         print("Error: Chip already in socket")
+        self.report_state_entry()
 
     def on_enter_vision_sequence_failed(self):
         print("Error: Vision sequence failed")
+        self.report_state_entry()
 
     def on_enter_no_pressure(self):
         print("Error: No pressure detected")
+        self.report_state_entry()
 
     def on_enter_lost_vacuum(self):
         print("Error: Vacuum system failure")
+        self.report_state_entry()
 
     def on_enter_bad_contact(self):
         print("Error: Bad socket contact")
+        self.report_state_entry()
 
     def on_enter_no_chip(self): 
         print("Error: No chip detected")
+        self.report_state_entry()
 
     def on_enter_safe_guard(self):
         print("Error: Safety guard triggered")
+        self.report_state_entry()
 
     def on_enter_bad_pins(self):
         print("Error: Bad pins detected")
+        self.report_state_entry()
 
     def on_enter_no_serial_number(self):
         print("Error: No serial number")
+        self.report_state_entry()
 
     def on_enter_failed_init(self):
         print("Error: Test initialization failed")
+        self.report_state_entry()
 
     def on_enter_no_wib_connection(self):
         print("Error: No WIB connection")
+        self.report_state_entry()
 
     def on_enter_failed_upload(self):
         print("Error: Failed to upload to HWDB")
+        self.report_state_entry()
 
     def resume_to_previous(self):
         if self.prior_normal_state:

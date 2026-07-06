@@ -342,7 +342,7 @@ class ChipTestingGUI(tk.Tk):
 
         self.state_names = [
             "ground", "surveying_sockets", "moving_chip_to_socket",
-            "running_ocr", "testing",
+            "running_ocr", "testing", "burning_serial_number",
             "writing_to_hwdb", "moving_chip_to_tray",
             "reseat", "moving_chip_to_bad_tray", "pause",
             "no_server_connection", "chip_in_socket", "vision_sequence_failed",
@@ -561,20 +561,11 @@ class ChipTestingGUI(tk.Tk):
 
         # Here we run the actual functions 
         try:
-            def make_on_enter(state_name, original_method): # Creates a function that will be called when entering a state, sending the state name to the output queue and calling the original method if it exists
 
-                def on_enter(self_sm): # Defines the on_enter method for the state machine, which will be called when entering a state
-                    self.output_queue.put(("__state__", state_name))
-                    if original_method:
-                        original_method(self_sm)
-                return on_enter
-            
-            overrides = {} # Creates a dictionary to hold the overridden on_enter methods for each state
-            for name in self.state_names: # Loops through each state name and creates an on_enter method for it, which will send the state name to the output queue and call the original method if it exists
-                method_name = f"on_enter_{name}" # Creates the method name for the on_enter method for the state
-                original= getattr(RTSStateMachine, method_name, None) # Gets the original method from RTSStateMachine if it exists, otherwise returns None
-                overrides[method_name] = make_on_enter(name, original) # Creates the on_enter method for the state and adds it to the overrides dictionary
-            
+            overrides = {
+                "report_state_entry": lambda self_sm: self.output_queue.put(("__state__", self_sm.current_state.id)),
+            }
+
             GUIRTSStateMachine = type("GUIRTSStateMachine", (RTSStateMachine,), overrides) # Creates a new class GUIRTSStateMachine that inherits from RTSStateMachine and overrides the on_enter methods to send state information to the output queue
             sm = GUIRTSStateMachine()
 
