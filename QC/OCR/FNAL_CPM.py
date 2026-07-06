@@ -368,8 +368,9 @@ def RunOCR(image_directory, image_file, ocr_results_dir, to_rts_config=False, so
             ocr_result = perform_ocr_minicpm(temp_image_path)
             print(f"OCR: {ocr_result}")
             if ocr_result:
-                serial_number, wafer_id, warnings = validate_COLDATA_OCR(ocr_result, image_number, allow_input=True)
+                serial_number, wafer_id, warnings = validate_COLDATA_OCR(ocr_result, image_number)
                 [print(w) for w in warnings]
+                success = True
                 
             else:
                 raise Exception("perform_ocr_minicpm return None")
@@ -378,8 +379,9 @@ def RunOCR(image_directory, image_file, ocr_results_dir, to_rts_config=False, so
             serial_number, wafer_id = GetUserHelp()
             success = True
 
-    chipinfo_file = SaveChipInfo(image_number, serial_number, wafer_id, ocr_results_dir)
-    success = True
+    if success:
+        chipinfo_file = SaveChipInfo(image_number, serial_number, wafer_id, ocr_results_dir)
+
 
     if to_rts_config:
         WriteToRTSConfig(chipinfo_file, config_file, socket_label)
@@ -489,10 +491,10 @@ if __name__=="__main__":
 
     start_time = time.time()
 
-    image_directory = '/Users/tcontrer/Downloads/' #"/Users/RTS/RTS_data/images/"
+    image_directory = "Users/ppd-cap-WD-137552/RTS_data/images/"
     ocr_results_dir = "Tested/fnal_cpm_results/"
 
-    image_id = "20250402142447_SN"
+    image_id = "20250925094236_tr2_col7_row1_SN"
     RunOCR(image_directory, image_id, ocr_results_dir)
     #image_id = "20250402170946"
     ShowOCRResult(image_id, ocr_results_dir, ocr_results_dir)
