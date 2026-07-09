@@ -591,10 +591,12 @@ class ChipTestingGUI(tk.Tk):
 
                             self.output_queue.put(("__resumed__", ""))
 
-                            if sm.current_state.id == "ground":
+                            if sm.last_pause_action == "1":
                                 aborted_to_ground = True
                                 break
 
+                            if sm.current_state.id == "ground":
+                                break
                             continue
 
                         if sm.current_state.id == "ground" and len(sm.chip_positions['col']) > 0: # If the current state is "ground" and there are chips to process, we can proceed to the next state
