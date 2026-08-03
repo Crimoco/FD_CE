@@ -351,6 +351,9 @@ def rts_ssh(dut_skt, root = "C:/DAT_LArASIC_QC/Tested/", duttype="FE", env="RT",
                 else: 
                     command = ["ssh", wibhost, "cd BNL_CE_WIB_SW_QC; python3 DAT_COLDATA_QC_top.py -t {}".format(testid)]
 
+                    if qc_callback is not None:
+                        qc_callback(clean_test_name(tms_items[testid]), "running")
+
             result=subrun(command, timeout = None) #rewrite with Popen later
             if result != None:
                 resultstr = result.stdout
